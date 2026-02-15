@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Pixel Arena</title>
+<title>Pixel Arena Evolution</title>
 <style>
 body { margin:0; background:#111; overflow:hidden; }
 canvas { display:block; image-rendering: pixelated; }
@@ -18,20 +18,13 @@ canvas.width = 1280;
 canvas.height = 720;
 
 const WORLD_SIZE = 7200;
+const ZOOM = 0.6; // smaller characters, zoomed out
 
 let camera = { x:0, y:0 };
 
 let keys = {};
 document.addEventListener("keydown", e => keys[e.key]=true);
 document.addEventListener("keyup", e => keys[e.key]=false);
-
-let mouse = { x:0, y:0 };
-canvas.addEventListener("mousemove", e=>{
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left;
-    mouse.y = e.clientY - rect.top;
-});
-canvas.addEventListener("click", ()=> shoot());
 
 /* =========================
    PLAYER
@@ -41,14 +34,14 @@ let player = {
     x: WORLD_SIZE/2,
     y: WORLD_SIZE/2,
     size: 64,
-    speed: 5,
+    speed: 6,
     hp: 100,
     maxHp: 100,
     level: 1,
     exp: 0,
     nextLevel: 50,
     damage: 20,
-    fireRate: 15,
+    fireRate: 20,
     cooldown: 0
 };
 
@@ -59,129 +52,129 @@ let player = {
 let enemies = [];
 let wave = 1;
 
-function spawnWave() {
-    for (let i=0;i<wave*4;i++) {
-
-        let type = Math.random();
-
-        if (type < 0.6) {
-            enemies.push(createEnemy("slime"));
-        } else if (type < 0.9) {
-            enemies.push(createEnemy("zombie"));
-        } else {
-            enemies.push(createEnemy("demon"));
-        }
+function spawnWave(){
+    for(let i=0;i<wave*4;i++){
+        let r=Math.random();
+        if(r<0.6) enemies.push(createEnemy("slime"));
+        else if(r<0.9) enemies.push(createEnemy("zombie"));
+        else enemies.push(createEnemy("demon"));
     }
 }
 
-function createEnemy(type) {
-
-    let base = {
-        x: Math.random()*WORLD_SIZE,
-        y: Math.random()*WORLD_SIZE,
-        size: 64
+function createEnemy(type){
+    let base={
+        x:Math.random()*WORLD_SIZE,
+        y:Math.random()*WORLD_SIZE,
+        size:64
     };
 
-    if (type==="slime") {
-        return {...base, type, hp:40, speed:2, damage:5, exp:15};
-    }
-    if (type==="zombie") {
-        return {...base, type, hp:80, speed:1.5, damage:10, exp:30};
-    }
-    if (type==="demon") {
-        return {...base, type, hp:150, speed:3, damage:20, exp:75};
-    }
+    if(type==="slime")
+        return {...base,type,hp:40,speed:2,damage:5,exp:15};
+    if(type==="zombie")
+        return {...base,type,hp:80,speed:1.6,damage:10,exp:30};
+    if(type==="demon")
+        return {...base,type,hp:150,speed:3,damage:20,exp:75};
 }
 
 spawnWave();
 
 /* =========================
-   PROJECTILES
+   AUTO AIM SHOOTING
 ========================= */
 
-let bullets = [];
+let bullets=[];
 
-function shoot() {
-    if (player.cooldown>0) return;
+function autoShoot(){
+    if(player.cooldown>0) return;
+    if(enemies.length===0) return;
 
-    let angle = Math.atan2(
-        mouse.y - canvas.height/2,
-        mouse.x - canvas.width/2
-    );
+    let closest=null;
+    let bestDist=999999;
 
-    bullets.push({
-        x: player.x,
-        y: player.y,
-        dx: Math.cos(angle)*10,
-        dy: Math.sin(angle)*10,
-        size:8,
-        life:100
+    enemies.forEach(e=>{
+        let dx=e.x-player.x;
+        let dy=e.y-player.y;
+        let dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<bestDist){
+            bestDist=dist;
+            closest=e;
+        }
     });
 
-    player.cooldown = player.fireRate;
+    if(closest){
+        let angle=Math.atan2(
+            closest.y-player.y,
+            closest.x-player.x
+        );
+
+        bullets.push({
+            x:player.x,
+            y:player.y,
+            dx:Math.cos(angle)*10,
+            dy:Math.sin(angle)*10,
+            life:120
+        });
+
+        player.cooldown=player.fireRate;
+    }
 }
 
 /* =========================
    UPDATE
 ========================= */
 
-function update() {
+function update(){
 
-    // movement
-    if (keys["w"]) player.y -= player.speed;
-    if (keys["s"]) player.y += player.speed;
-    if (keys["a"]) player.x -= player.speed;
-    if (keys["d"]) player.x += player.speed;
+    if(keys["w"]) player.y-=player.speed;
+    if(keys["s"]) player.y+=player.speed;
+    if(keys["a"]) player.x-=player.speed;
+    if(keys["d"]) player.x+=player.speed;
 
-    player.x = Math.max(0, Math.min(WORLD_SIZE, player.x));
-    player.y = Math.max(0, Math.min(WORLD_SIZE, player.y));
+    player.x=Math.max(0,Math.min(WORLD_SIZE,player.x));
+    player.y=Math.max(0,Math.min(WORLD_SIZE,player.y));
 
-    camera.x = player.x - canvas.width/2;
-    camera.y = player.y - canvas.height/2;
+    camera.x=player.x-(canvas.width/(2*ZOOM));
+    camera.y=player.y-(canvas.height/(2*ZOOM));
 
-    if (player.cooldown>0) player.cooldown--;
+    if(player.cooldown>0) player.cooldown--;
 
-    // bullets
+    autoShoot();
+
     bullets.forEach((b,i)=>{
         b.x+=b.dx;
         b.y+=b.dy;
         b.life--;
 
         enemies.forEach((e,ei)=>{
-            if (Math.abs(b.x-e.x)<32 && Math.abs(b.y-e.y)<32){
-                e.hp -= player.damage;
+            if(Math.abs(b.x-e.x)<32 && Math.abs(b.y-e.y)<32){
+                e.hp-=player.damage;
                 bullets.splice(i,1);
-
-                if (e.hp<=0){
-                    player.exp += e.exp;
+                if(e.hp<=0){
+                    player.exp+=e.exp;
                     enemies.splice(ei,1);
                 }
             }
         });
 
-        if (b.life<=0) bullets.splice(i,1);
+        if(b.life<=0) bullets.splice(i,1);
     });
 
-    // enemies
     enemies.forEach(e=>{
-        let dx = player.x - e.x;
-        let dy = player.y - e.y;
-        let dist = Math.sqrt(dx*dx+dy*dy);
-        e.x += dx/dist*e.speed;
-        e.y += dy/dist*e.speed;
+        let dx=player.x-e.x;
+        let dy=player.y-e.y;
+        let dist=Math.sqrt(dx*dx+dy*dy);
+        e.x+=dx/dist*e.speed;
+        e.y+=dy/dist*e.speed;
 
-        if (dist<40){
-            player.hp -= e.damage*0.05;
-        }
+        if(dist<40) player.hp-=e.damage*0.05;
     });
 
-    if (enemies.length===0){
+    if(enemies.length===0){
         wave++;
         spawnWave();
     }
 
-    // level up
-    if (player.exp>=player.nextLevel){
+    if(player.exp>=player.nextLevel){
         player.exp=0;
         player.level++;
         player.nextLevel+=50;
@@ -193,47 +186,62 @@ function update() {
 }
 
 /* =========================
-   DRAW SPRITES (SHADED)
+   DETAILED SPRITES
 ========================= */
 
 function drawPlayer(x,y){
 
-    // body
+    // legs
+    ctx.fillStyle="#3b3b3b";
+    ctx.fillRect(x+20,y+40,8,20);
+    ctx.fillRect(x+36,y+40,8,20);
+
+    // torso
     ctx.fillStyle="#2c5aa0";
-    ctx.fillRect(x,y,64,64);
+    ctx.fillRect(x+16,y+20,32,24);
 
     ctx.fillStyle="#3d73c9";
-    ctx.fillRect(x+8,y+8,48,48);
+    ctx.fillRect(x+20,y+24,24,16);
 
-    ctx.fillStyle="#1e3c6b";
-    ctx.fillRect(x,y+48,64,16);
+    // head
+    ctx.fillStyle="#f1c27d";
+    ctx.fillRect(x+20,y,24,20);
 
-    // helmet highlight
-    ctx.fillStyle="#6ea8ff";
-    ctx.fillRect(x+20,y+10,24,8);
+    // hair
+    ctx.fillStyle="#4b2e19";
+    ctx.fillRect(x+20,y,24,8);
+
+    // eyes
+    ctx.fillStyle="black";
+    ctx.fillRect(x+26,y+8,4,4);
+    ctx.fillRect(x+38,y+8,4,4);
 }
 
 function drawEnemy(e,x,y){
 
-    if (e.type==="slime"){
+    if(e.type==="slime"){
         ctx.fillStyle="#3cb043";
-        ctx.fillRect(x,y,64,64);
+        ctx.fillRect(x,y+16,64,40);
         ctx.fillStyle="#58d66b";
-        ctx.fillRect(x+8,y+8,48,48);
+        ctx.fillRect(x+8,y+20,48,24);
     }
 
-    if (e.type==="zombie"){
+    if(e.type==="zombie"){
         ctx.fillStyle="#5a7d3c";
-        ctx.fillRect(x,y,64,64);
+        ctx.fillRect(x+16,y+16,32,40);
+        ctx.fillStyle="#f1c27d";
+        ctx.fillRect(x+20,y,24,16);
         ctx.fillStyle="#7fae4e";
-        ctx.fillRect(x+8,y+8,48,48);
+        ctx.fillRect(x+20,y+20,24,20);
     }
 
-    if (e.type==="demon"){
+    if(e.type==="demon"){
         ctx.fillStyle="#7b1e1e";
-        ctx.fillRect(x,y,64,64);
+        ctx.fillRect(x+16,y+16,32,40);
         ctx.fillStyle="#b32b2b";
-        ctx.fillRect(x+8,y+8,48,48);
+        ctx.fillRect(x+20,y+20,24,20);
+        ctx.fillStyle="#ff5555";
+        ctx.fillRect(x+26,y,12,12);
     }
 }
 
@@ -245,28 +253,37 @@ function draw(){
 
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // world grid
-    ctx.fillStyle="#2a2a2a";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.save();
+    ctx.scale(ZOOM,ZOOM);
+    ctx.translate(-camera.x,-camera.y);
+
+    // ground tiles (visual movement grid)
+    for(let x=0;x<WORLD_SIZE;x+=128){
+        for(let y=0;y<WORLD_SIZE;y+=128){
+            ctx.fillStyle = ((x+y)/128)%2==0 ? "#2a2a2a" : "#242424";
+            ctx.fillRect(x,y,128,128);
+        }
+    }
 
     enemies.forEach(e=>{
-        drawEnemy(e,e.x-camera.x,e.y-camera.y);
+        drawEnemy(e,e.x,e.y);
     });
 
+    ctx.fillStyle="yellow";
     bullets.forEach(b=>{
-        ctx.fillStyle="yellow";
-        ctx.fillRect(b.x-camera.x,b.y-camera.y,8,8);
+        ctx.fillRect(b.x,b.y,8,8);
     });
 
-    drawPlayer(player.x-camera.x,player.y-camera.y);
+    drawPlayer(player.x,player.y);
 
-    // HP BAR (GREEN)
+    ctx.restore();
+
+    // UI
     ctx.fillStyle="red";
     ctx.fillRect(20,20,300,20);
     ctx.fillStyle="lime";
     ctx.fillRect(20,20,300*(player.hp/player.maxHp),20);
 
-    // EXP BAR (BLUE)
     ctx.fillStyle="#222";
     ctx.fillRect(20,50,300,15);
     ctx.fillStyle="blue";
