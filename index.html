@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Terraria Style Arena</title>
+<title>64px Wave Arena</title>
 <style>
-body { margin:0; background:#1d1f21; overflow:hidden; }
+body { margin:0; background:#1a1a1a; overflow:hidden; }
 canvas { display:block; margin:auto; image-rendering:pixelated; }
 </style>
 </head>
@@ -13,161 +13,209 @@ canvas { display:block; margin:auto; image-rendering:pixelated; }
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-canvas.width = 900;
-canvas.height = 600;
+canvas.width = 960;
+canvas.height = 640;
 
 let keys = {};
 document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
+let TILE = 64;
+
+// PLAYER
 let player = {
     x: canvas.width/2,
     y: canvas.height/2,
+    size: 64,
     speed: 4,
     fireRate: 20,
     cooldown: 0,
-    bulletSpeed: 8,
+    bulletSpeed: 10,
     damage: 1,
     health: 100,
     maxHealth: 100,
     angle: 0,
     level: 1,
     xp: 0,
-    xpNeeded: 20
+    xpNeeded: 30
 };
 
 let bullets = [];
 let enemies = [];
-let gamePaused = false;
-let levelChoices = [];
+let wave = 1;
+let enemiesToSpawn = 0;
+let waveActive = false;
+let betweenWaves = true;
+let waveTimer = 180;
 
-function spawnEnemy() {
-    let x = Math.random() * canvas.width;
-    let y = -40;
-
-    enemies.push({
-        x,y,
-        size: 32,
-        speed: 1.2 + player.level*0.1,
-        health: 4 + player.level,
-        xpValue: 5
-    });
+function startWave(){
+    waveActive = true;
+    betweenWaves = false;
+    enemiesToSpawn = 5 + wave * 3;
 }
-setInterval(spawnEnemy, 1400);
+
+function spawnEnemy(){
+    if(enemiesToSpawn <= 0) return;
+
+    let side = Math.floor(Math.random()*4);
+    let x,y;
+
+    if(side===0){ x=0; y=Math.random()*canvas.height; }
+    if(side===1){ x=canvas.width; y=Math.random()*canvas.height; }
+    if(side===2){ x=Math.random()*canvas.width; y=0; }
+    if(side===3){ x=Math.random()*canvas.width; y=canvas.height; }
+
+    let typeRoll = Math.random();
+    let enemy;
+
+    if(typeRoll < 0.4){
+        enemy = {type:"slime",x,y,size:64,speed:1.5,health:5,xp:5};
+    } else if(typeRoll < 0.65){
+        enemy = {type:"fast",x,y,size:64,speed:3,health:4,xp:7};
+    } else if(typeRoll < 0.85){
+        enemy = {type:"tank",x,y,size:64,speed:1,health:15,xp:15};
+    } else {
+        enemy = {type:"shooter",x,y,size:64,speed:1.5,health:8,xp:12,shootCooldown:60};
+    }
+
+    enemies.push(enemy);
+    enemiesToSpawn--;
+}
 
 function shoot(target){
     let angle = Math.atan2(target.y-player.y,target.x-player.x);
     bullets.push({
-        x: player.x,
-        y: player.y,
-        dx: Math.cos(angle)*player.bulletSpeed,
-        dy: Math.sin(angle)*player.bulletSpeed,
-        size:6,
-        damage: player.damage
+        x:player.x,
+        y:player.y,
+        dx:Math.cos(angle)*player.bulletSpeed,
+        dy:Math.sin(angle)*player.bulletSpeed,
+        damage:player.damage
     });
     player.angle = angle;
 }
 
 function levelUp(){
-    gamePaused = true;
     player.level++;
     player.xp = 0;
-    player.xpNeeded += 20;
-
-    levelChoices = [
-        "Damage Up",
-        "Fire Rate Up",
-        "Bullet Speed Up",
-        "Speed Up",
-        "Max Health Up"
-    ];
+    player.xpNeeded += 25;
+    player.damage++;
+    player.fireRate = Math.max(6, player.fireRate-2);
 }
-
-function applyUpgrade(choice){
-    if(choice==="Damage Up") player.damage++;
-    if(choice==="Fire Rate Up") player.fireRate=Math.max(5,player.fireRate-3);
-    if(choice==="Bullet Speed Up") player.bulletSpeed+=2;
-    if(choice==="Speed Up") player.speed+=0.5;
-    if(choice==="Max Health Up"){
-        player.maxHealth+=20;
-        player.health+=20;
-    }
-    gamePaused=false;
-}
-
-canvas.addEventListener("click",e=>{
-    if(!gamePaused) return;
-    let rect=canvas.getBoundingClientRect();
-    let mx=e.clientX-rect.left;
-    let my=e.clientY-rect.top;
-
-    levelChoices.forEach((choice,i)=>{
-        let y=200+i*60;
-        if(mx>300&&mx<600&&my>y-20&&my<y+20){
-            applyUpgrade(choice);
-        }
-    });
-});
 
 function update(){
-    if(gamePaused) return;
 
-    if(keys["w"]) player.y-=player.speed;
-    if(keys["s"]) player.y+=player.speed;
-    if(keys["a"]) player.x-=player.speed;
-    if(keys["d"]) player.x+=player.speed;
+    // WAVES
+    if(betweenWaves){
+        waveTimer--;
+        if(waveTimer <= 0){
+            startWave();
+        }
+        return;
+    }
+
+    if(waveActive){
+        if(enemiesToSpawn > 0 && Math.random()<0.05){
+            spawnEnemy();
+        }
+
+        if(enemiesToSpawn===0 && enemies.length===0){
+            waveActive=false;
+            betweenWaves=true;
+            wave++;
+            waveTimer=180;
+        }
+    }
+
+    // MOVEMENT
+    if(keys["w"]) player.y -= player.speed;
+    if(keys["s"]) player.y += player.speed;
+    if(keys["a"]) player.x -= player.speed;
+    if(keys["d"]) player.x += player.speed;
 
     player.x=Math.max(0,Math.min(canvas.width,player.x));
     player.y=Math.max(0,Math.min(canvas.height,player.y));
 
-    enemies.forEach(e=>{
+    // ENEMIES
+    enemies.forEach((e,ei)=>{
+
         let dx=player.x-e.x;
         let dy=player.y-e.y;
         let dist=Math.sqrt(dx*dx+dy*dy);
+
         e.x+=dx/dist*e.speed;
         e.y+=dy/dist*e.speed;
 
-        if(dist<20) player.health-=0.2;
+        if(dist<40){
+            player.health-=0.3;
+        }
+
+        if(e.type==="shooter"){
+            e.shootCooldown--;
+            if(e.shootCooldown<=0){
+                bullets.push({
+                    x:e.x,
+                    y:e.y,
+                    dx:dx/dist*6,
+                    dy:dy/dist*6,
+                    damage:1,
+                    enemy:true
+                });
+                e.shootCooldown=90;
+            }
+        }
     });
 
+    // AUTO SHOOT
     let closest=null;
-    let closestDist=Infinity;
+    let cd=Infinity;
     enemies.forEach(e=>{
         let dx=e.x-player.x;
         let dy=e.y-player.y;
         let dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist<closestDist){
-            closestDist=dist;
+        if(dist<cd){
+            cd=dist;
             closest=e;
         }
     });
 
-    if(closest&&player.cooldown<=0){
+    if(closest && player.cooldown<=0){
         shoot(closest);
         player.cooldown=player.fireRate;
     }
     if(player.cooldown>0) player.cooldown--;
 
+    // BULLETS
     bullets.forEach((b,bi)=>{
         b.x+=b.dx;
         b.y+=b.dy;
+
         if(b.x<0||b.x>canvas.width||b.y<0||b.y>canvas.height){
             bullets.splice(bi,1);
+            return;
         }
-        enemies.forEach((e,ei)=>{
-            let dx=e.x-b.x;
-            let dy=e.y-b.y;
-            let dist=Math.sqrt(dx*dx+dy*dy);
-            if(dist<16){
-                e.health-=b.damage;
-                bullets.splice(bi,1);
-                if(e.health<=0){
-                    player.xp+=e.xpValue;
-                    enemies.splice(ei,1);
-                    if(player.xp>=player.xpNeeded) levelUp();
+
+        if(!b.enemy){
+            enemies.forEach((e,ei)=>{
+                let dx=e.x-b.x;
+                let dy=e.y-b.y;
+                if(Math.sqrt(dx*dx+dy*dy)<32){
+                    e.health-=b.damage;
+                    bullets.splice(bi,1);
+                    if(e.health<=0){
+                        player.xp+=e.xp;
+                        enemies.splice(ei,1);
+                        if(player.xp>=player.xpNeeded) levelUp();
+                    }
                 }
+            });
+        } else {
+            let dx=player.x-b.x;
+            let dy=player.y-b.y;
+            if(Math.sqrt(dx*dx+dy*dy)<32){
+                player.health-=b.damage;
+                bullets.splice(bi,1);
             }
-        });
+        }
     });
 
     if(player.health<=0){
@@ -177,90 +225,64 @@ function update(){
 }
 
 function drawBackground(){
-    // dirt
-    ctx.fillStyle="#5c4033";
+    ctx.fillStyle="#6b4f2a";
     ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    // grass top strip
-    ctx.fillStyle="#3cb043";
-    ctx.fillRect(0,0,canvas.width,40);
+    ctx.fillStyle="#3c8d2f";
+    ctx.fillRect(0,0,canvas.width,80);
 }
 
 function drawPlayer(){
-    // body
     ctx.fillStyle="#4a90e2";
-    ctx.fillRect(player.x-10,player.y-16,20,24);
-
-    // head
+    ctx.fillRect(player.x-24,player.y-40,48,64);
     ctx.fillStyle="#f1c27d";
-    ctx.fillRect(player.x-8,player.y-28,16,12);
+    ctx.fillRect(player.x-16,player.y-64,32,24);
 
-    // eyes
-    ctx.fillStyle="black";
-    ctx.fillRect(player.x-4,player.y-24,2,2);
-    ctx.fillRect(player.x+2,player.y-24,2,2);
-
-    // gun
     ctx.save();
-    ctx.translate(player.x,player.y-10);
+    ctx.translate(player.x,player.y-32);
     ctx.rotate(player.angle);
-    ctx.fillStyle="#c9c9c9";
-    ctx.fillRect(8,-3,18,6);
+    ctx.fillStyle="#cccccc";
+    ctx.fillRect(20,-6,32,12);
     ctx.restore();
 }
 
 function drawEnemies(){
     enemies.forEach(e=>{
-        // slime body
-        ctx.fillStyle="#5aff5a";
-        ctx.fillRect(e.x-16,e.y-12,32,20);
-
-        // slime top
-        ctx.fillStyle="#3bd13b";
-        ctx.fillRect(e.x-12,e.y-20,24,10);
-
-        // eyes
-        ctx.fillStyle="black";
-        ctx.fillRect(e.x-6,e.y-10,4,4);
-        ctx.fillRect(e.x+2,e.y-10,4,4);
+        if(e.type==="slime"){
+            ctx.fillStyle="#5aff5a";
+            ctx.fillRect(e.x-24,e.y-24,48,48);
+        }
+        if(e.type==="fast"){
+            ctx.fillStyle="#b84cff";
+            ctx.fillRect(e.x-24,e.y-24,48,48);
+        }
+        if(e.type==="tank"){
+            ctx.fillStyle="#8b5a2b";
+            ctx.fillRect(e.x-28,e.y-28,56,56);
+        }
+        if(e.type==="shooter"){
+            ctx.fillStyle="#4fc3f7";
+            ctx.fillRect(e.x-24,e.y-24,48,48);
+        }
     });
 }
 
 function drawBullets(){
-    ctx.fillStyle="#00ffff";
+    ctx.fillStyle="yellow";
     bullets.forEach(b=>{
-        ctx.fillRect(b.x-3,b.y-3,6,6);
+        ctx.fillRect(b.x-4,b.y-4,8,8);
     });
 }
 
 function drawUI(){
     ctx.fillStyle="white";
-    ctx.font="18px monospace";
-    ctx.fillText("HP: "+Math.floor(player.health)+"/"+player.maxHealth,20,30);
-    ctx.fillText("Level: "+player.level,20,55);
+    ctx.font="20px monospace";
+    ctx.fillText("Wave: "+wave,20,30);
+    ctx.fillText("HP: "+Math.floor(player.health),20,60);
 
     ctx.fillStyle="#444";
-    ctx.fillRect(20,70,200,15);
+    ctx.fillRect(20,80,200,15);
     ctx.fillStyle="#00ff00";
-    ctx.fillRect(20,70,(player.xp/player.xpNeeded)*200,15);
-}
-
-function drawLevelMenu(){
-    ctx.fillStyle="rgba(0,0,0,0.8)";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    ctx.fillStyle="white";
-    ctx.font="30px monospace";
-    ctx.fillText("LEVEL UP!",340,120);
-
-    ctx.font="20px monospace";
-    levelChoices.forEach((choice,i)=>{
-        let y=200+i*60;
-        ctx.fillStyle="#3cb043";
-        ctx.fillRect(300,y-20,300,40);
-        ctx.fillStyle="black";
-        ctx.fillText(choice,350,y+5);
-    });
+    ctx.fillRect(20,80,(player.xp/player.xpNeeded)*200,15);
 }
 
 function draw(){
@@ -269,7 +291,12 @@ function draw(){
     drawEnemies();
     drawBullets();
     drawUI();
-    if(gamePaused) drawLevelMenu();
+
+    if(betweenWaves){
+        ctx.fillStyle="white";
+        ctx.font="40px monospace";
+        ctx.fillText("Wave "+wave+" starting...",320,300);
+    }
 }
 
 function loop(){
