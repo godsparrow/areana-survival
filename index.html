@@ -1,114 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Neon Arena</title>
+<style>
+body {
+    margin: 0;
+    background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+    overflow: hidden;
+}
+canvas {
+    display: block;
+    margin: auto;
+}
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-canvas.width = 800;
-canvas.height = 500;
-
-let keys = {};
-let mouse = { x: 0, y: 0 };
-
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-
-canvas.addEventListener("mousemove", e => {
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left;
-    mouse.y = e.clientY - rect.top;
-});
+canvas.width = 900;
+canvas.height = 600;
 
 let player = {
-    x: 400,
-    y: 250,
-    size: 20,
+    x: canvas.width/2,
+    y: canvas.height/2,
+    radius: 18,
     speed: 4,
-    attackCooldown: 0,
-    health: 5
+    health: 100,
+    shootCooldown: 0
 };
 
 let enemies = [];
-let projectiles = [];
+let bullets = [];
 let wave = 1;
 
 function spawnWave() {
-    for (let i = 0; i < wave + 2; i++) {
+    for (let i = 0; i < wave + 3; i++) {
         enemies.push({
             x: Math.random() * canvas.width,
             y: Math.random() * canvas.height,
-            size: 18,
-            speed: 1 + wave * 0.2
+            radius: 16,
+            speed: 1 + wave * 0.2,
+            health: 3
         });
     }
 }
 
 spawnWave();
 
-canvas.addEventListener("click", () => {
-    if (player.attackCooldown <= 0) {
-        let dx = mouse.x - player.x;
-        let dy = mouse.y - player.y;
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+function getClosestEnemy() {
+    let closest = null;
+    let minDist = Infinity;
+
+    enemies.forEach(enemy => {
+        let dx = enemy.x - player.x;
+        let dy = enemy.y - player.y;
         let dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < minDist) {
+            minDist = dist;
+            closest = enemy;
+        }
+    });
 
-        projectiles.push({
-            x: player.x,
-            y: player.y,
-            size: 6,
-            vx: dx / dist * 6,
-            vy: dy / dist * 6
-        });
+    return closest;
+}
 
-        player.attackCooldown = 15;
-    }
-});
+function shoot() {
+    if (player.shootCooldown > 0) return;
+
+    let target = getClosestEnemy();
+    if (!target) return;
+
+    let dx = target.x - player.x;
+    let dy = target.y - player.y;
+    let dist = Math.sqrt(dx*dx + dy*dy);
+
+    bullets.push({
+        x: player.x,
+        y: player.y,
+        vx: dx/dist * 7,
+        vy: dy/dist * 7,
+        radius: 5
+    });
+
+    player.shootCooldown = 15;
+}
 
 function update() {
 
-    // Movement
     if (keys["w"] || keys["ArrowUp"]) player.y -= player.speed;
     if (keys["s"] || keys["ArrowDown"]) player.y += player.speed;
     if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
     if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
 
-    player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
-    player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
+    player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+    player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
 
-    if (player.attackCooldown > 0) player.attackCooldown--;
+    shoot();
 
-    // Move projectiles
-    projectiles.forEach((p, i) => {
-        p.x += p.vx;
-        p.y += p.vy;
+    if (player.shootCooldown > 0) player.shootCooldown--;
 
-        if (p.x < 0 || p.x > canvas.width || p.y < 0 || p.y > canvas.height) {
-            projectiles.splice(i, 1);
-        }
+    bullets.forEach((b, i) => {
+        b.x += b.vx;
+        b.y += b.vy;
+
+        enemies.forEach((e, ei) => {
+            let dx = b.x - e.x;
+            let dy = b.y - e.y;
+            if (Math.sqrt(dx*dx + dy*dy) < b.radius + e.radius) {
+                e.health--;
+                bullets.splice(i,1);
+                if (e.health <= 0) enemies.splice(ei,1);
+            }
+        });
     });
 
-    // Move enemies
     enemies.forEach(e => {
         let dx = player.x - e.x;
         let dy = player.y - e.y;
         let dist = Math.sqrt(dx*dx + dy*dy);
-        e.x += dx / dist * e.speed;
-        e.y += dy / dist * e.speed;
 
-        if (dist < e.size + player.size) {
-            player.health--;
-            e.x = Math.random() * canvas.width;
-            e.y = Math.random() * canvas.height;
+        e.x += dx/dist * e.speed;
+        e.y += dy/dist * e.speed;
+
+        if (dist < e.radius + player.radius) {
+            player.health -= 0.2;
         }
-    });
-
-    // Projectile collision
-    projectiles.forEach((p, pi) => {
-        enemies.forEach((e, ei) => {
-            let dx = p.x - e.x;
-            let dy = p.y - e.y;
-            if (Math.sqrt(dx*dx + dy*dy) < p.size + e.size) {
-                enemies.splice(ei, 1);
-                projectiles.splice(pi, 1);
-            }
-        });
     });
 
     if (enemies.length === 0) {
@@ -122,36 +148,46 @@ function update() {
     }
 }
 
+function drawGlowCircle(x, y, radius, color) {
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+}
+
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Arena border
+    ctx.strokeStyle = "#00ffff";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(5,5,canvas.width-10,canvas.height-10);
+
     // Player
-    ctx.fillStyle = "#00f7ff";
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, player.size, 0, Math.PI*2);
-    ctx.fill();
+    drawGlowCircle(player.x, player.y, player.radius, "#00f7ff");
 
     // Enemies
-    ctx.fillStyle = "#ff0055";
     enemies.forEach(e => {
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, e.size, 0, Math.PI*2);
-        ctx.fill();
+        drawGlowCircle(e.x, e.y, e.radius, "#ff0055");
     });
 
-    // Projectiles
-    ctx.fillStyle = "#ffffff";
-    projectiles.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-        ctx.fill();
+    // Bullets
+    bullets.forEach(b => {
+        drawGlowCircle(b.x, b.y, b.radius, "#ffffff");
     });
 
-    // UI
+    // Health Bar
+    ctx.fillStyle = "red";
+    ctx.fillRect(20, 20, 200, 15);
+    ctx.fillStyle = "lime";
+    ctx.fillRect(20, 20, player.health * 2, 15);
+
     ctx.fillStyle = "white";
-    ctx.font = "20px Arial";
-    ctx.fillText("Health: " + player.health, 10, 25);
-    ctx.fillText("Wave: " + wave, 10, 50);
+    ctx.font = "18px Arial";
+    ctx.fillText("Wave: " + wave, 20, 60);
 }
 
 function gameLoop() {
@@ -162,3 +198,6 @@ function gameLoop() {
 
 gameLoop();
 </script>
+
+</body>
+</html>
