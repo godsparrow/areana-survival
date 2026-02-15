@@ -1,210 +1,266 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Pixel Shooter Survivor</title>
+<title>Auto Shooter Arena</title>
 <style>
-body {
-    margin: 0;
-    background: black;
-    overflow: hidden;
-}
-canvas {
-    display: block;
-    margin: auto;
-    background: #111;
-    image-rendering: pixelated;
-}
+body { margin:0; background:black; overflow:hidden; }
+canvas { display:block; margin:auto; background:#111; image-rendering:pixelated; }
 </style>
 </head>
 <body>
-
 <canvas id="game"></canvas>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-
 canvas.width = 900;
 canvas.height = 600;
+
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
 let player = {
     x: canvas.width/2,
     y: canvas.height/2,
     size: 28,
     speed: 4,
-    shootCooldown: 0,
-    angle: 0
+    fireRate: 20,
+    cooldown: 0,
+    bulletSpeed: 8,
+    damage: 1,
+    health: 100,
+    maxHealth: 100,
+    angle: 0,
+    coins: 0
 };
 
-let keys = {};
-let enemies = [];
 let bullets = [];
-let score = 0;
+let enemies = [];
+let wave = 1;
 
-document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+let shop = {
+    x: 80,
+    y: canvas.height - 80,
+    size: 50
+};
 
 function spawnEnemy() {
     let side = Math.floor(Math.random()*4);
-    let x, y;
+    let x,y;
 
-    if (side === 0) { x = 0; y = Math.random()*canvas.height; }
-    if (side === 1) { x = canvas.width; y = Math.random()*canvas.height; }
-    if (side === 2) { x = Math.random()*canvas.width; y = 0; }
-    if (side === 3) { x = Math.random()*canvas.width; y = canvas.height; }
+    if(side===0){ x=0; y=Math.random()*canvas.height; }
+    if(side===1){ x=canvas.width; y=Math.random()*canvas.height; }
+    if(side===2){ x=Math.random()*canvas.width; y=0; }
+    if(side===3){ x=Math.random()*canvas.width; y=canvas.height; }
 
-    enemies.push({
-        x: x,
-        y: y,
-        size: 26,
-        speed: 1.5,
-        health: 3
-    });
+    let type = Math.random();
+
+    if(type < 0.6){
+        enemies.push({x,y,size:26,speed:1.5+wave*0.1,health:3+wave});
+    } else {
+        enemies.push({x,y,size:40,speed:0.8+wave*0.1,health:8+wave*2});
+    }
 }
 
-setInterval(spawnEnemy, 1000);
+setInterval(spawnEnemy, 1200);
 
-function shoot(target) {
-    let angle = Math.atan2(target.y - player.y, target.x - player.x);
+function shoot(target){
+    let angle = Math.atan2(target.y-player.y,target.x-player.x);
 
     bullets.push({
         x: player.x,
         y: player.y,
-        dx: Math.cos(angle) * 8,
-        dy: Math.sin(angle) * 8,
-        size: 6
+        dx: Math.cos(angle)*player.bulletSpeed,
+        dy: Math.sin(angle)*player.bulletSpeed,
+        size:6,
+        damage: player.damage
     });
 
     player.angle = angle;
 }
 
-function update() {
+function update(){
 
-    // Movement
-    if (keys["w"]) player.y -= player.speed;
-    if (keys["s"]) player.y += player.speed;
-    if (keys["a"]) player.x -= player.speed;
-    if (keys["d"]) player.x += player.speed;
+    // movement
+    if(keys["w"]) player.y -= player.speed;
+    if(keys["s"]) player.y += player.speed;
+    if(keys["a"]) player.x -= player.speed;
+    if(keys["d"]) player.x += player.speed;
 
-    player.x = Math.max(0, Math.min(canvas.width, player.x));
-    player.y = Math.max(0, Math.min(canvas.height, player.y));
+    player.x = Math.max(0,Math.min(canvas.width,player.x));
+    player.y = Math.max(0,Math.min(canvas.height,player.y));
 
-    // Move enemies
-    enemies.forEach(e => {
-        let dx = player.x - e.x;
-        let dy = player.y - e.y;
-        let dist = Math.sqrt(dx*dx + dy*dy);
-        e.x += dx/dist * e.speed;
-        e.y += dy/dist * e.speed;
-    });
+    // enemies move
+    enemies.forEach(e=>{
+        let dx = player.x-e.x;
+        let dy = player.y-e.y;
+        let dist = Math.sqrt(dx*dx+dy*dy);
+        e.x += dx/dist*e.speed;
+        e.y += dy/dist*e.speed;
 
-    // Find closest enemy
-    let closest = null;
-    let closestDist = Infinity;
-
-    enemies.forEach(e => {
-        let dx = e.x - player.x;
-        let dy = e.y - player.y;
-        let dist = Math.sqrt(dx*dx + dy*dy);
-
-        if (dist < closestDist) {
-            closestDist = dist;
-            closest = e;
+        if(dist < 20){
+            player.health -= 0.2;
         }
     });
 
-    // Auto shoot (no range limit)
-    if (closest && player.shootCooldown <= 0) {
+    // find closest
+    let closest=null;
+    let closestDist=Infinity;
+
+    enemies.forEach(e=>{
+        let dx=e.x-player.x;
+        let dy=e.y-player.y;
+        let dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<closestDist){
+            closestDist=dist;
+            closest=e;
+        }
+    });
+
+    // auto shoot
+    if(closest && player.cooldown<=0){
         shoot(closest);
-        player.shootCooldown = 20; // fire rate
+        player.cooldown = player.fireRate;
     }
 
-    if (player.shootCooldown > 0) player.shootCooldown--;
+    if(player.cooldown>0) player.cooldown--;
 
-    // Move bullets
-    bullets.forEach((b, bi) => {
-        b.x += b.dx;
-        b.y += b.dy;
+    // bullets
+    bullets.forEach((b,bi)=>{
+        b.x+=b.dx;
+        b.y+=b.dy;
 
-        // Remove off screen
-        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+        if(b.x<0||b.x>canvas.width||b.y<0||b.y>canvas.height){
             bullets.splice(bi,1);
         }
 
-        // Collision
-        enemies.forEach((e, ei) => {
-            let dx = e.x - b.x;
-            let dy = e.y - b.y;
-            let dist = Math.sqrt(dx*dx + dy*dy);
+        enemies.forEach((e,ei)=>{
+            let dx=e.x-b.x;
+            let dy=e.y-b.y;
+            let dist=Math.sqrt(dx*dx+dy*dy);
 
-            if (dist < e.size/2) {
-                e.health -= 1;
+            if(dist < e.size/2){
+                e.health -= b.damage;
                 bullets.splice(bi,1);
 
-                if (e.health <= 0) {
+                if(e.health<=0){
+                    player.coins+=5;
                     enemies.splice(ei,1);
-                    score++;
                 }
             }
         });
     });
+
+    // shop interaction
+    let dx = player.x - shop.x;
+    let dy = player.y - shop.y;
+    let dist = Math.sqrt(dx*dx+dy*dy);
+
+    if(dist < 60 && keys["e"]){
+        openShop();
+    }
+
+    if(player.health <=0){
+        alert("Game Over");
+        location.reload();
+    }
 }
 
-function drawPlayer() {
-    ctx.fillStyle = "#00ffcc";
-    ctx.fillRect(player.x-14, player.y-14, 28, 28);
+function openShop(){
+    let choice = prompt(
+`UPGRADES (Coins: ${player.coins})
+1: +Damage (20)
+2: Faster Fire Rate (25)
+3: +Bullet Speed (20)
+4: +Max Health (30)
+5: Heal (15)`
+    );
 
-    ctx.fillStyle = "#003333";
-    ctx.fillRect(player.x-6, player.y-6, 12, 12);
+    if(choice==="1" && player.coins>=20){
+        player.damage++;
+        player.coins-=20;
+    }
+    if(choice==="2" && player.coins>=25){
+        player.fireRate = Math.max(5, player.fireRate-3);
+        player.coins-=25;
+    }
+    if(choice==="3" && player.coins>=20){
+        player.bulletSpeed+=2;
+        player.coins-=20;
+    }
+    if(choice==="4" && player.coins>=30){
+        player.maxHealth+=20;
+        player.health+=20;
+        player.coins-=30;
+    }
+    if(choice==="5" && player.coins>=15){
+        player.health = Math.min(player.maxHealth, player.health+30);
+        player.coins-=15;
+    }
+}
 
-    // Gun barrel
+function drawPlayer(){
+    ctx.fillStyle="#00ffcc";
+    ctx.fillRect(player.x-14,player.y-14,28,28);
+
+    ctx.fillStyle="#003333";
+    ctx.fillRect(player.x-6,player.y-6,12,12);
+
     ctx.save();
-    ctx.translate(player.x, player.y);
+    ctx.translate(player.x,player.y);
     ctx.rotate(player.angle);
-    ctx.fillStyle = "#aaaaaa";
-    ctx.fillRect(14, -4, 16, 8);
+    ctx.fillStyle="#aaa";
+    ctx.fillRect(14,-4,18,8);
     ctx.restore();
 }
 
-function drawEnemies() {
-    enemies.forEach(e => {
-        ctx.fillStyle = "#ff3333";
-        ctx.fillRect(e.x-13, e.y-13, 26, 26);
-
-        ctx.fillStyle = "#550000";
-        ctx.fillRect(e.x-5, e.y-5, 10, 10);
+function drawEnemies(){
+    enemies.forEach(e=>{
+        ctx.fillStyle=e.size>30?"purple":"red";
+        ctx.fillRect(e.x-e.size/2,e.y-e.size/2,e.size,e.size);
     });
 }
 
-function drawBullets() {
-    ctx.fillStyle = "yellow";
-    bullets.forEach(b => {
-        ctx.fillRect(b.x-3, b.y-3, 6, 6);
+function drawBullets(){
+    ctx.fillStyle="yellow";
+    bullets.forEach(b=>{
+        ctx.fillRect(b.x-3,b.y-3,6,6);
     });
 }
 
-function drawUI() {
-    ctx.fillStyle = "white";
-    ctx.font = "20px monospace";
-    ctx.fillText("Score: " + score, 20, 30);
+function drawShop(){
+    ctx.fillStyle="gold";
+    ctx.fillRect(shop.x-25,shop.y-25,50,50);
+
+    ctx.fillStyle="black";
+    ctx.font="16px monospace";
+    ctx.fillText("SHOP (E)",shop.x-40,shop.y-40);
 }
 
-function draw() {
+function drawUI(){
+    ctx.fillStyle="white";
+    ctx.font="18px monospace";
+    ctx.fillText("HP: "+Math.floor(player.health)+"/"+player.maxHealth,20,30);
+    ctx.fillText("Coins: "+player.coins,20,55);
+}
+
+function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     drawPlayer();
     drawEnemies();
     drawBullets();
+    drawShop();
     drawUI();
 }
 
-function gameLoop() {
+function loop(){
     update();
     draw();
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(loop);
 }
 
-gameLoop();
+loop();
 </script>
-
 </body>
 </html>
