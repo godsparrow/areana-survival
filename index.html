@@ -2,16 +2,17 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Auto Slash Arena</title>
+<title>Pixel Slash Arena</title>
 <style>
 body {
     margin: 0;
-    background: radial-gradient(circle at center, #111 0%, #000 100%);
+    background: #1b1b1b;
     overflow: hidden;
 }
 canvas {
     display: block;
     margin: auto;
+    image-rendering: pixelated;
 }
 </style>
 </head>
@@ -23,8 +24,8 @@ canvas {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-canvas.width = 900;
-canvas.height = 600;
+canvas.width = 800;
+canvas.height = 500;
 
 let state = "game";
 let wave = 1;
@@ -32,13 +33,13 @@ let wave = 1;
 let player = {
     x: canvas.width/2,
     y: canvas.height/2,
-    radius: 18,
-    speed: 4,
+    size: 32,
+    speed: 3,
     health: 100,
     maxHealth: 100,
     damage: 1,
     slashCooldown: 0,
-    slashRange: 70
+    slashRange: 60
 };
 
 let enemies = [];
@@ -65,30 +66,19 @@ function spawnWave() {
             enemies.push({
                 x: Math.random()*canvas.width,
                 y: Math.random()*canvas.height,
-                radius: 16,
-                speed: 1.5 + wave*0.05,
-                health: 3 + wave*0.3,
-                color: "#ff0055"
+                size: 28,
+                speed: 1.2,
+                health: 3,
+                type: "slime"
             });
-        } 
-        else if (type < 0.8) {
+        } else {
             enemies.push({
                 x: Math.random()*canvas.width,
                 y: Math.random()*canvas.height,
-                radius: 24,
-                speed: 0.8,
-                health: 10 + wave,
-                color: "#aa00ff"
-            });
-        } 
-        else {
-            enemies.push({
-                x: Math.random()*canvas.width,
-                y: Math.random()*canvas.height,
-                radius: 14,
-                speed: 3,
-                health: 2 + wave*0.2,
-                color: "#ffff00"
+                size: 36,
+                speed: 0.7,
+                health: 6,
+                type: "tank"
             });
         }
     }
@@ -99,7 +89,7 @@ spawnWave();
 function autoSlash() {
     if (player.slashCooldown > 0) return;
 
-    let hitSomething = false;
+    let hit = false;
 
     enemies.forEach((e, i) => {
         let dx = e.x - player.x;
@@ -108,28 +98,25 @@ function autoSlash() {
 
         if (dist < player.slashRange) {
             e.health -= player.damage;
-            hitSomething = true;
-
+            hit = true;
             if (e.health <= 0) enemies.splice(i,1);
         }
     });
 
-    if (hitSomething) {
-        player.slashCooldown = 30;
-    }
+    if (hit) player.slashCooldown = 25;
 }
 
 function update() {
 
     if (state !== "game") return;
 
-    if (keys["w"] || keys["ArrowUp"]) player.y -= player.speed;
-    if (keys["s"] || keys["ArrowDown"]) player.y += player.speed;
-    if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
-    if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
+    if (keys["w"]) player.y -= player.speed;
+    if (keys["s"]) player.y += player.speed;
+    if (keys["a"]) player.x -= player.speed;
+    if (keys["d"]) player.x += player.speed;
 
-    player.x = Math.max(player.radius, Math.min(canvas.width-player.radius, player.x));
-    player.y = Math.max(player.radius, Math.min(canvas.height-player.radius, player.y));
+    player.x = Math.max(0, Math.min(canvas.width-player.size, player.x));
+    player.y = Math.max(0, Math.min(canvas.height-player.size, player.y));
 
     autoSlash();
 
@@ -143,17 +130,15 @@ function update() {
         e.x += dx/dist * e.speed;
         e.y += dy/dist * e.speed;
 
-        if (dist < e.radius + player.radius) {
-            player.health -= 0.3;
+        if (dist < e.size/2 + player.size/2) {
+            player.health -= 0.2;
         }
     });
 
-    if (enemies.length === 0) {
-        state = "shop";
-    }
+    if (enemies.length === 0) state = "shop";
 
     if (player.health <= 0) {
-        alert("Game Over! Wave reached: " + wave);
+        alert("Game Over! Wave: " + wave);
         document.location.reload();
     }
 }
@@ -173,14 +158,36 @@ function startNextWave() {
     state = "game";
 }
 
-function drawGlowCircle(x,y,r,color) {
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = color;
-    ctx.fillStyle = color;
+function drawPlayer(x,y) {
+    ctx.fillStyle="#dcdcdc";
+    ctx.fillRect(x+8,y,16,8);
+    ctx.fillStyle="#ffffff";
+    ctx.fillRect(x+4,y+8,24,16);
+    ctx.fillStyle="#000000";
+    ctx.fillRect(x+10,y+14,4,4);
+    ctx.fillRect(x+18,y+14,4,4);
+}
+
+function drawSlime(x,y) {
+    ctx.fillStyle="#00aa00";
+    ctx.fillRect(x,y+8,28,20);
+    ctx.fillStyle="#007700";
+    ctx.fillRect(x+4,y+4,20,12);
+}
+
+function drawTank(x,y) {
+    ctx.fillStyle="#880000";
+    ctx.fillRect(x,y,36,36);
+    ctx.fillStyle="#550000";
+    ctx.fillRect(x+6,y+6,24,24);
+}
+
+function drawSlashEffect() {
+    ctx.strokeStyle="#ffffff";
+    ctx.lineWidth=2;
     ctx.beginPath();
-    ctx.arc(x,y,r,0,Math.PI*2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.arc(player.x+player.size/2, player.y+player.size/2, player.slashRange, 0, Math.PI*2);
+    ctx.stroke();
 }
 
 function draw() {
@@ -188,22 +195,14 @@ function draw() {
 
     if (state === "game") {
 
-        ctx.strokeStyle = "#00ffff";
-        ctx.lineWidth = 4;
-        ctx.strokeRect(5,5,canvas.width-10,canvas.height-10);
+        drawPlayer(player.x,player.y);
 
-        drawGlowCircle(player.x,player.y,player.radius,"#00f7ff");
-
-        enemies.forEach(e => {
-            drawGlowCircle(e.x,e.y,e.radius,e.color);
+        enemies.forEach(e=>{
+            if (e.type==="slime") drawSlime(e.x,e.y);
+            else drawTank(e.x,e.y);
         });
 
-        if (player.slashCooldown > 20) {
-            ctx.strokeStyle = "#ffffff";
-            ctx.beginPath();
-            ctx.arc(player.x,player.y,player.slashRange,0,Math.PI*2);
-            ctx.stroke();
-        }
+        if (player.slashCooldown > 15) drawSlashEffect();
 
         ctx.fillStyle="red";
         ctx.fillRect(20,20,200,15);
@@ -211,25 +210,23 @@ function draw() {
         ctx.fillRect(20,20,(player.health/player.maxHealth)*200,15);
 
         ctx.fillStyle="white";
-        ctx.font="18px Arial";
+        ctx.font="16px monospace";
         ctx.fillText("Wave: "+wave,20,60);
-        ctx.fillText("Damage: "+player.damage,20,85);
+        ctx.fillText("Damage: "+player.damage,20,80);
     }
 
-    else if (state === "shop") {
+    else if (state==="shop") {
         ctx.fillStyle="white";
-        ctx.font="30px Arial";
-        ctx.fillText("SHOP - Wave Cleared!", 300,150);
-
-        ctx.font="20px Arial";
-        ctx.fillText("Press 1: +1 Damage", 350,250);
-        ctx.fillText("Press 2: +Speed", 350,290);
-        ctx.fillText("Press 3: +20 Max Health", 350,330);
-        ctx.fillText("Press ENTER to continue", 320,400);
+        ctx.font="20px monospace";
+        ctx.fillText("SHOP - Wave Cleared!",280,150);
+        ctx.fillText("1: +1 Damage",300,220);
+        ctx.fillText("2: +Speed",300,260);
+        ctx.fillText("3: +20 Max HP",300,300);
+        ctx.fillText("Press ENTER to continue",250,360);
     }
 }
 
-function gameLoop() {
+function gameLoop(){
     update();
     draw();
     requestAnimationFrame(gameLoop);
