@@ -1,17 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Pixel Slash Arena</title>
+<title>Pixel Sword Survivor</title>
 <style>
 body {
     margin: 0;
-    background: #1b1b1b;
+    background: black;
     overflow: hidden;
 }
 canvas {
     display: block;
     margin: auto;
+    background: #111;
     image-rendering: pixelated;
 }
 </style>
@@ -24,104 +24,59 @@ canvas {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-canvas.width = 800;
-canvas.height = 500;
-
-let state = "game";
-let wave = 1;
+canvas.width = 900;
+canvas.height = 600;
 
 let player = {
     x: canvas.width/2,
     y: canvas.height/2,
-    size: 32,
-    speed: 3,
-    health: 100,
-    maxHealth: 100,
+    size: 28,
+    speed: 4,
+    slashRange: 90,
     damage: 1,
-    slashCooldown: 0,
-    slashRange: 60
+    cooldown: 0,
+    angle: 0
 };
 
-let enemies = [];
 let keys = {};
+let enemies = [];
+let score = 0;
 
-document.addEventListener("keydown", e => {
-    keys[e.key] = true;
+document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-    if (state === "shop") {
-        if (e.key === "1") buyUpgrade(0);
-        if (e.key === "2") buyUpgrade(1);
-        if (e.key === "3") buyUpgrade(2);
-        if (e.key === "Enter") startNextWave();
-    }
-});
+function spawnEnemy() {
+    let side = Math.floor(Math.random()*4);
+    let x, y;
 
-document.addEventListener("keyup", e => keys[e.key] = false);
+    if (side === 0) { x = 0; y = Math.random()*canvas.height; }
+    if (side === 1) { x = canvas.width; y = Math.random()*canvas.height; }
+    if (side === 2) { x = Math.random()*canvas.width; y = 0; }
+    if (side === 3) { x = Math.random()*canvas.width; y = canvas.height; }
 
-function spawnWave() {
-    for (let i = 0; i < wave + 2; i++) {
-        let type = Math.random();
-
-        if (type < 0.5) {
-            enemies.push({
-                x: Math.random()*canvas.width,
-                y: Math.random()*canvas.height,
-                size: 28,
-                speed: 1.2,
-                health: 3,
-                type: "slime"
-            });
-        } else {
-            enemies.push({
-                x: Math.random()*canvas.width,
-                y: Math.random()*canvas.height,
-                size: 36,
-                speed: 0.7,
-                health: 6,
-                type: "tank"
-            });
-        }
-    }
-}
-
-spawnWave();
-
-function autoSlash() {
-    if (player.slashCooldown > 0) return;
-
-    let hit = false;
-
-    enemies.forEach((e, i) => {
-        let dx = e.x - player.x;
-        let dy = e.y - player.y;
-        let dist = Math.sqrt(dx*dx + dy*dy);
-
-        if (dist < player.slashRange) {
-            e.health -= player.damage;
-            hit = true;
-            if (e.health <= 0) enemies.splice(i,1);
-        }
+    enemies.push({
+        x: x,
+        y: y,
+        size: 26,
+        speed: 1.5,
+        health: 3
     });
-
-    if (hit) player.slashCooldown = 25;
 }
+
+setInterval(spawnEnemy, 1200);
 
 function update() {
 
-    if (state !== "game") return;
-
+    // movement
     if (keys["w"]) player.y -= player.speed;
     if (keys["s"]) player.y += player.speed;
     if (keys["a"]) player.x -= player.speed;
     if (keys["d"]) player.x += player.speed;
 
-    player.x = Math.max(0, Math.min(canvas.width-player.size, player.x));
-    player.y = Math.max(0, Math.min(canvas.height-player.size, player.y));
+    player.x = Math.max(0, Math.min(canvas.width, player.x));
+    player.y = Math.max(0, Math.min(canvas.height, player.y));
 
-    autoSlash();
-
-    if (player.slashCooldown > 0) player.slashCooldown--;
-
+    // enemy movement
     enemies.forEach(e => {
         let dx = player.x - e.x;
         let dy = player.y - e.y;
@@ -129,104 +84,123 @@ function update() {
 
         e.x += dx/dist * e.speed;
         e.y += dy/dist * e.speed;
+    });
 
-        if (dist < e.size/2 + player.size/2) {
-            player.health -= 0.2;
+    // find closest enemy
+    let closest = null;
+    let closestDist = Infinity;
+
+    enemies.forEach(e => {
+        let dx = e.x - player.x;
+        let dy = e.y - player.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+
+        if (dist < closestDist) {
+            closestDist = dist;
+            closest = e;
         }
     });
 
-    if (enemies.length === 0) state = "shop";
-
-    if (player.health <= 0) {
-        alert("Game Over! Wave: " + wave);
-        document.location.reload();
+    // auto aim
+    if (closest) {
+        player.angle = Math.atan2(
+            closest.y - player.y,
+            closest.x - player.x
+        );
     }
-}
 
-function buyUpgrade(option) {
-    if (option === 0) player.damage += 1;
-    if (option === 1) player.speed += 0.5;
-    if (option === 2) {
-        player.maxHealth += 20;
-        player.health = player.maxHealth;
+    // auto slash
+    if (player.cooldown <= 0 && closest && closestDist < player.slashRange) {
+        enemies.forEach((e,i) => {
+            let dx = e.x - player.x;
+            let dy = e.y - player.y;
+            let dist = Math.sqrt(dx*dx + dy*dy);
+
+            if (dist < player.slashRange) {
+                e.health -= player.damage;
+                if (e.health <= 0) {
+                    enemies.splice(i,1);
+                    score++;
+                }
+            }
+        });
+
+        player.cooldown = 25;
     }
+
+    if (player.cooldown > 0) player.cooldown--;
 }
 
-function startNextWave() {
-    wave++;
-    spawnWave();
-    state = "game";
+function drawPixelPlayer() {
+    ctx.fillStyle = "#00ffcc";
+    ctx.fillRect(player.x-14, player.y-14, 28, 28);
+
+    ctx.fillStyle = "#003333";
+    ctx.fillRect(player.x-6, player.y-6, 12, 12);
 }
 
-function drawPlayer(x,y) {
-    ctx.fillStyle="#dcdcdc";
-    ctx.fillRect(x+8,y,16,8);
-    ctx.fillStyle="#ffffff";
-    ctx.fillRect(x+4,y+8,24,16);
-    ctx.fillStyle="#000000";
-    ctx.fillRect(x+10,y+14,4,4);
-    ctx.fillRect(x+18,y+14,4,4);
+function drawSword() {
+
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.angle);
+
+    // blade
+    ctx.fillStyle = "#dddddd";
+    ctx.fillRect(20, -6, 60, 12);
+
+    // blade tip
+    ctx.fillStyle = "#bbbbbb";
+    ctx.fillRect(75, -4, 10, 8);
+
+    // guard
+    ctx.fillStyle = "#ffaa00";
+    ctx.fillRect(10, -12, 15, 24);
+
+    // handle
+    ctx.fillStyle = "#663300";
+    ctx.fillRect(0, -5, 20, 10);
+
+    ctx.restore();
 }
 
-function drawSlime(x,y) {
-    ctx.fillStyle="#00aa00";
-    ctx.fillRect(x,y+8,28,20);
-    ctx.fillStyle="#007700";
-    ctx.fillRect(x+4,y+4,20,12);
-}
+function drawEnemies() {
+    enemies.forEach(e => {
+        ctx.fillStyle = "#ff3333";
+        ctx.fillRect(e.x-13, e.y-13, 26, 26);
 
-function drawTank(x,y) {
-    ctx.fillStyle="#880000";
-    ctx.fillRect(x,y,36,36);
-    ctx.fillStyle="#550000";
-    ctx.fillRect(x+6,y+6,24,24);
+        ctx.fillStyle = "#550000";
+        ctx.fillRect(e.x-5, e.y-5, 10, 10);
+    });
 }
 
 function drawSlashEffect() {
-    ctx.strokeStyle="#ffffff";
-    ctx.lineWidth=2;
-    ctx.beginPath();
-    ctx.arc(player.x+player.size/2, player.y+player.size/2, player.slashRange, 0, Math.PI*2);
-    ctx.stroke();
+    if (player.cooldown > 18) {
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.slashRange, 0, Math.PI*2);
+        ctx.stroke();
+    }
+}
+
+function drawUI() {
+    ctx.fillStyle = "white";
+    ctx.font = "20px monospace";
+    ctx.fillText("Score: " + score, 20, 30);
 }
 
 function draw() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    if (state === "game") {
-
-        drawPlayer(player.x,player.y);
-
-        enemies.forEach(e=>{
-            if (e.type==="slime") drawSlime(e.x,e.y);
-            else drawTank(e.x,e.y);
-        });
-
-        if (player.slashCooldown > 15) drawSlashEffect();
-
-        ctx.fillStyle="red";
-        ctx.fillRect(20,20,200,15);
-        ctx.fillStyle="lime";
-        ctx.fillRect(20,20,(player.health/player.maxHealth)*200,15);
-
-        ctx.fillStyle="white";
-        ctx.font="16px monospace";
-        ctx.fillText("Wave: "+wave,20,60);
-        ctx.fillText("Damage: "+player.damage,20,80);
-    }
-
-    else if (state==="shop") {
-        ctx.fillStyle="white";
-        ctx.font="20px monospace";
-        ctx.fillText("SHOP - Wave Cleared!",280,150);
-        ctx.fillText("1: +1 Damage",300,220);
-        ctx.fillText("2: +Speed",300,260);
-        ctx.fillText("3: +20 Max HP",300,300);
-        ctx.fillText("Press ENTER to continue",250,360);
-    }
+    drawSlashEffect();
+    drawPixelPlayer();
+    drawSword();
+    drawEnemies();
+    drawUI();
 }
 
-function gameLoop(){
+function gameLoop() {
     update();
     draw();
     requestAnimationFrame(gameLoop);
