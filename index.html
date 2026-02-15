@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Large World Pixel Arena</title>
+<title>Pixel Arena</title>
 <style>
-body { margin:0; background:black; overflow:hidden; }
-canvas { display:block; margin:auto; image-rendering:pixelated; }
+body { margin:0; background:#111; overflow:hidden; }
+canvas { display:block; image-rendering: pixelated; }
 </style>
 </head>
 <body>
@@ -14,188 +14,267 @@ canvas { display:block; margin:auto; image-rendering:pixelated; }
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-canvas.width = 960;
-canvas.height = 640;
+canvas.width = 1280;
+canvas.height = 720;
 
 const WORLD_SIZE = 7200;
-const SPRITE_SIZE = 64;
 
 let camera = { x:0, y:0 };
 
 let keys = {};
-document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+document.addEventListener("keydown", e => keys[e.key]=true);
+document.addEventListener("keyup", e => keys[e.key]=false);
+
+let mouse = { x:0, y:0 };
+canvas.addEventListener("mousemove", e=>{
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+});
+canvas.addEventListener("click", ()=> shoot());
+
+/* =========================
+   PLAYER
+========================= */
 
 let player = {
     x: WORLD_SIZE/2,
     y: WORLD_SIZE/2,
-    speed: 6,
-    size: SPRITE_SIZE,
-    fireRate: 20,
-    cooldown: 0,
-    bulletSpeed: 12,
-    damage: 1,
-    health: 100,
-    angle: 0
+    size: 64,
+    speed: 5,
+    hp: 100,
+    maxHp: 100,
+    level: 1,
+    exp: 0,
+    nextLevel: 50,
+    damage: 20,
+    fireRate: 15,
+    cooldown: 0
 };
 
-let bullets = [];
-let enemies = [];
+/* =========================
+   ENEMIES
+========================= */
 
-function spawnEnemy(){
-    enemies.push({
+let enemies = [];
+let wave = 1;
+
+function spawnWave() {
+    for (let i=0;i<wave*4;i++) {
+
+        let type = Math.random();
+
+        if (type < 0.6) {
+            enemies.push(createEnemy("slime"));
+        } else if (type < 0.9) {
+            enemies.push(createEnemy("zombie"));
+        } else {
+            enemies.push(createEnemy("demon"));
+        }
+    }
+}
+
+function createEnemy(type) {
+
+    let base = {
         x: Math.random()*WORLD_SIZE,
         y: Math.random()*WORLD_SIZE,
-        size: SPRITE_SIZE,
-        speed: 2,
-        health: 5
-    });
-}
-setInterval(spawnEnemy, 1500);
+        size: 64
+    };
 
-function shoot(target){
-    let angle = Math.atan2(target.y-player.y,target.x-player.x);
+    if (type==="slime") {
+        return {...base, type, hp:40, speed:2, damage:5, exp:15};
+    }
+    if (type==="zombie") {
+        return {...base, type, hp:80, speed:1.5, damage:10, exp:30};
+    }
+    if (type==="demon") {
+        return {...base, type, hp:150, speed:3, damage:20, exp:75};
+    }
+}
+
+spawnWave();
+
+/* =========================
+   PROJECTILES
+========================= */
+
+let bullets = [];
+
+function shoot() {
+    if (player.cooldown>0) return;
+
+    let angle = Math.atan2(
+        mouse.y - canvas.height/2,
+        mouse.x - canvas.width/2
+    );
+
     bullets.push({
-        x:player.x,
-        y:player.y,
-        dx:Math.cos(angle)*player.bulletSpeed,
-        dy:Math.sin(angle)*player.bulletSpeed,
-        damage:player.damage
+        x: player.x,
+        y: player.y,
+        dx: Math.cos(angle)*10,
+        dy: Math.sin(angle)*10,
+        size:8,
+        life:100
     });
-    player.angle = angle;
+
+    player.cooldown = player.fireRate;
 }
 
-function update(){
+/* =========================
+   UPDATE
+========================= */
+
+function update() {
 
     // movement
-    if(keys["w"]) player.y -= player.speed;
-    if(keys["s"]) player.y += player.speed;
-    if(keys["a"]) player.x -= player.speed;
-    if(keys["d"]) player.x += player.speed;
+    if (keys["w"]) player.y -= player.speed;
+    if (keys["s"]) player.y += player.speed;
+    if (keys["a"]) player.x -= player.speed;
+    if (keys["d"]) player.x += player.speed;
 
-    player.x = Math.max(0,Math.min(WORLD_SIZE,player.x));
-    player.y = Math.max(0,Math.min(WORLD_SIZE,player.y));
+    player.x = Math.max(0, Math.min(WORLD_SIZE, player.x));
+    player.y = Math.max(0, Math.min(WORLD_SIZE, player.y));
 
-    // camera follow
     camera.x = player.x - canvas.width/2;
     camera.y = player.y - canvas.height/2;
 
-    camera.x = Math.max(0,Math.min(WORLD_SIZE-canvas.width,camera.x));
-    camera.y = Math.max(0,Math.min(WORLD_SIZE-canvas.height,camera.y));
-
-    // enemies
-    enemies.forEach((e,ei)=>{
-        let dx=player.x-e.x;
-        let dy=player.y-e.y;
-        let dist=Math.sqrt(dx*dx+dy*dy);
-
-        e.x+=dx/dist*e.speed;
-        e.y+=dy/dist*e.speed;
-
-        if(dist<40){
-            player.health-=0.2;
-        }
-    });
-
-    // auto shoot
-    let closest=null;
-    let cd=Infinity;
-    enemies.forEach(e=>{
-        let dx=e.x-player.x;
-        let dy=e.y-player.y;
-        let dist=Math.sqrt(dx*dx+dy*dy);
-        if(dist<cd){
-            cd=dist;
-            closest=e;
-        }
-    });
-
-    if(closest && player.cooldown<=0){
-        shoot(closest);
-        player.cooldown=player.fireRate;
-    }
-    if(player.cooldown>0) player.cooldown--;
+    if (player.cooldown>0) player.cooldown--;
 
     // bullets
-    bullets.forEach((b,bi)=>{
+    bullets.forEach((b,i)=>{
         b.x+=b.dx;
         b.y+=b.dy;
+        b.life--;
 
         enemies.forEach((e,ei)=>{
-            let dx=e.x-b.x;
-            let dy=e.y-b.y;
-            if(Math.sqrt(dx*dx+dy*dy)<32){
-                e.health-=b.damage;
-                bullets.splice(bi,1);
-                if(e.health<=0){
+            if (Math.abs(b.x-e.x)<32 && Math.abs(b.y-e.y)<32){
+                e.hp -= player.damage;
+                bullets.splice(i,1);
+
+                if (e.hp<=0){
+                    player.exp += e.exp;
                     enemies.splice(ei,1);
                 }
             }
         });
+
+        if (b.life<=0) bullets.splice(i,1);
     });
-}
 
-function drawBackground(){
-    ctx.fillStyle="#3b2f1c";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    ctx.strokeStyle="#2a2114";
-    for(let x=0; x<WORLD_SIZE; x+=64){
-        ctx.beginPath();
-        ctx.moveTo(x-camera.x, -camera.y);
-        ctx.lineTo(x-camera.x, WORLD_SIZE-camera.y);
-        ctx.stroke();
-    }
-    for(let y=0; y<WORLD_SIZE; y+=64){
-        ctx.beginPath();
-        ctx.moveTo(-camera.x, y-camera.y);
-        ctx.lineTo(WORLD_SIZE-camera.x, y-camera.y);
-        ctx.stroke();
-    }
-}
-
-function drawPlayer(){
-    let px = player.x - camera.x;
-    let py = player.y - camera.y;
-
-    // 64x64 pixel sprite made of blocks
-    ctx.fillStyle="#4a90e2";
-    ctx.fillRect(px-24,py-32,48,48);
-
-    ctx.fillStyle="#f1c27d";
-    ctx.fillRect(px-16,py-48,32,16);
-}
-
-function drawEnemies(){
+    // enemies
     enemies.forEach(e=>{
-        let ex=e.x-camera.x;
-        let ey=e.y-camera.y;
+        let dx = player.x - e.x;
+        let dy = player.y - e.y;
+        let dist = Math.sqrt(dx*dx+dy*dy);
+        e.x += dx/dist*e.speed;
+        e.y += dy/dist*e.speed;
 
-        ctx.fillStyle="#5aff5a";
-        ctx.fillRect(ex-24,ey-24,48,48);
+        if (dist<40){
+            player.hp -= e.damage*0.05;
+        }
     });
+
+    if (enemies.length===0){
+        wave++;
+        spawnWave();
+    }
+
+    // level up
+    if (player.exp>=player.nextLevel){
+        player.exp=0;
+        player.level++;
+        player.nextLevel+=50;
+        player.maxHp+=20;
+        player.hp=player.maxHp;
+        player.damage+=5;
+        player.fireRate=Math.max(5,player.fireRate-1);
+    }
 }
 
-function drawBullets(){
-    ctx.fillStyle="yellow";
-    bullets.forEach(b=>{
-        ctx.fillRect(b.x-camera.x-4,b.y-camera.y-4,8,8);
-    });
+/* =========================
+   DRAW SPRITES (SHADED)
+========================= */
+
+function drawPlayer(x,y){
+
+    // body
+    ctx.fillStyle="#2c5aa0";
+    ctx.fillRect(x,y,64,64);
+
+    ctx.fillStyle="#3d73c9";
+    ctx.fillRect(x+8,y+8,48,48);
+
+    ctx.fillStyle="#1e3c6b";
+    ctx.fillRect(x,y+48,64,16);
+
+    // helmet highlight
+    ctx.fillStyle="#6ea8ff";
+    ctx.fillRect(x+20,y+10,24,8);
 }
 
-function drawUI(){
-    ctx.fillStyle="white";
-    ctx.font="20px monospace";
-    ctx.fillText("HP: "+Math.floor(player.health),20,30);
+function drawEnemy(e,x,y){
+
+    if (e.type==="slime"){
+        ctx.fillStyle="#3cb043";
+        ctx.fillRect(x,y,64,64);
+        ctx.fillStyle="#58d66b";
+        ctx.fillRect(x+8,y+8,48,48);
+    }
+
+    if (e.type==="zombie"){
+        ctx.fillStyle="#5a7d3c";
+        ctx.fillRect(x,y,64,64);
+        ctx.fillStyle="#7fae4e";
+        ctx.fillRect(x+8,y+8,48,48);
+    }
+
+    if (e.type==="demon"){
+        ctx.fillStyle="#7b1e1e";
+        ctx.fillRect(x,y,64,64);
+        ctx.fillStyle="#b32b2b";
+        ctx.fillRect(x+8,y+8,48,48);
+    }
 }
+
+/* =========================
+   DRAW
+========================= */
 
 function draw(){
+
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    drawBackground();
-    drawPlayer();
-    drawEnemies();
-    drawBullets();
-    drawUI();
+
+    // world grid
+    ctx.fillStyle="#2a2a2a";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    enemies.forEach(e=>{
+        drawEnemy(e,e.x-camera.x,e.y-camera.y);
+    });
+
+    bullets.forEach(b=>{
+        ctx.fillStyle="yellow";
+        ctx.fillRect(b.x-camera.x,b.y-camera.y,8,8);
+    });
+
+    drawPlayer(player.x-camera.x,player.y-camera.y);
+
+    // HP BAR (GREEN)
+    ctx.fillStyle="red";
+    ctx.fillRect(20,20,300,20);
+    ctx.fillStyle="lime";
+    ctx.fillRect(20,20,300*(player.hp/player.maxHp),20);
+
+    // EXP BAR (BLUE)
+    ctx.fillStyle="#222";
+    ctx.fillRect(20,50,300,15);
+    ctx.fillStyle="blue";
+    ctx.fillRect(20,50,300*(player.exp/player.nextLevel),15);
+
+    ctx.fillStyle="white";
+    ctx.fillText("Level "+player.level,20,85);
+    ctx.fillText("Wave "+wave,20,105);
 }
 
 function loop(){
@@ -203,6 +282,7 @@ function loop(){
     draw();
     requestAnimationFrame(loop);
 }
+
 loop();
 </script>
 </body>
