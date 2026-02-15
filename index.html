@@ -1,25 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Arena Survivor</title>
-<style>
-    body {
-        margin: 0;
-        background: #111;
-        overflow: hidden;
-    }
-    canvas {
-        display: block;
-        margin: auto;
-        background: #1b1b1b;
-    }
-</style>
-</head>
-<body>
-
-<canvas id="game"></canvas>
-
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -28,9 +6,16 @@ canvas.width = 800;
 canvas.height = 500;
 
 let keys = {};
+let mouse = { x: 0, y: 0 };
 
 document.addEventListener("keydown", e => keys[e.key] = true);
 document.addEventListener("keyup", e => keys[e.key] = false);
+
+canvas.addEventListener("mousemove", e => {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+});
 
 let player = {
     x: 400,
@@ -58,6 +43,24 @@ function spawnWave() {
 
 spawnWave();
 
+canvas.addEventListener("click", () => {
+    if (player.attackCooldown <= 0) {
+        let dx = mouse.x - player.x;
+        let dy = mouse.y - player.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+
+        projectiles.push({
+            x: player.x,
+            y: player.y,
+            size: 6,
+            vx: dx / dist * 6,
+            vy: dy / dist * 6
+        });
+
+        player.attackCooldown = 15;
+    }
+});
+
 function update() {
 
     // Movement
@@ -69,21 +72,17 @@ function update() {
     player.x = Math.max(player.size, Math.min(canvas.width - player.size, player.x));
     player.y = Math.max(player.size, Math.min(canvas.height - player.size, player.y));
 
-    // Attack
-    if ((keys[" "] || keys["Space"]) && player.attackCooldown <= 0) {
-        projectiles.push({
-            x: player.x,
-            y: player.y,
-            size: 6,
-            speed: 6
-        });
-        player.attackCooldown = 20;
-    }
-
     if (player.attackCooldown > 0) player.attackCooldown--;
 
     // Move projectiles
-    projectiles.forEach(p => p.y -= p.speed);
+    projectiles.forEach((p, i) => {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0 || p.x > canvas.width || p.y < 0 || p.y > canvas.height) {
+            projectiles.splice(i, 1);
+        }
+    });
 
     // Move enemies
     enemies.forEach(e => {
@@ -93,7 +92,6 @@ function update() {
         e.x += dx / dist * e.speed;
         e.y += dy / dist * e.speed;
 
-        // Player collision
         if (dist < e.size + player.size) {
             player.health--;
             e.x = Math.random() * canvas.width;
@@ -113,7 +111,6 @@ function update() {
         });
     });
 
-    // New wave
     if (enemies.length === 0) {
         wave++;
         spawnWave();
@@ -165,6 +162,3 @@ function gameLoop() {
 
 gameLoop();
 </script>
-
-</body>
-</html>
