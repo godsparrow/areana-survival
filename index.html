@@ -3,7 +3,7 @@
 <head>
 <title>Arcane Arena</title>
 <style>
-body { margin:0; background:#111; overflow:hidden; }
+body { margin:0; background:black; overflow:hidden; }
 canvas { display:block; image-rendering: pixelated; }
 </style>
 </head>
@@ -18,9 +18,9 @@ canvas.width = 1280;
 canvas.height = 720;
 
 const WORLD_SIZE = 7200;
-const ZOOM = 0.6;
+const ZOOM = 0.65;
 
-let gameState = "menu"; // menu, game, stats
+let gameState = "menu";
 let camera = {x:0,y:0};
 
 /* ================= INPUT ================= */
@@ -29,22 +29,13 @@ let keys = {};
 document.addEventListener("keydown", e=>{
     keys[e.key]=true;
 
-    if(gameState==="menu" && e.key==="Enter"){
-        startGame();
-    }
+    if(gameState==="menu" && e.key==="Enter") startGame();
 
-    if(gameState==="game" && e.key==="p"){
-        gameState="stats";
-    }
-    else if(gameState==="stats" && e.key==="p"){
-        gameState="game";
-    }
+    if(gameState==="game" && e.key==="p") gameState="stats";
+    else if(gameState==="stats" && e.key==="p") gameState="game";
 
-    if(gameState==="stats"){
-        spendStat(e.key);
-    }
+    if(gameState==="stats") spendStat(e.key);
 });
-
 document.addEventListener("keyup", e=>keys[e.key]=false);
 
 /* ================= PLAYER ================= */
@@ -55,7 +46,6 @@ function createPlayer(){
 return {
     x: WORLD_SIZE/2,
     y: WORLD_SIZE/2,
-    size: 48,
     speed: 5,
     hp: 100,
     maxHp: 100,
@@ -66,7 +56,7 @@ return {
     fireRate: 25,
     cooldown: 0,
     statPoints: 0,
-    walkFrame: 0,
+    walk: 0,
     casting: 0
 };
 }
@@ -77,34 +67,32 @@ let enemies=[];
 let wave=1;
 
 function spawnWave(){
-    for(let i=0;i<wave*6;i++){
+    for(let i=0;i<wave*5;i++){
         let r=Math.random();
-        if(r<0.4) enemies.push(createEnemy("slime"));
-        else if(r<0.7) enemies.push(createEnemy("beast"));
-        else if(r<0.9) enemies.push(createEnemy("ghost"));
-        else enemies.push(createEnemy("demon"));
+        if(r<0.4) enemies.push(makeEnemy("slime"));
+        else if(r<0.7) enemies.push(makeEnemy("beast"));
+        else if(r<0.9) enemies.push(makeEnemy("ghost"));
+        else enemies.push(makeEnemy("demon"));
     }
 }
 
-function createEnemy(type){
-    let base={
+function makeEnemy(type){
+    return {
         x:Math.random()*WORLD_SIZE,
         y:Math.random()*WORLD_SIZE,
-        size:48,
-        anim:0
+        type,
+        anim:0,
+        hp: type==="slime"?40:
+            type==="beast"?90:
+            type==="ghost"?70:160,
+        speed: type==="ghost"?4:
+               type==="beast"?3:
+               type==="demon"?2.5:2,
+        damage:10,
+        exp: type==="slime"?15:
+             type==="beast"?35:
+             type==="ghost"?40:80
     };
-
-    if(type==="slime")
-        return {...base,type,hp:40,speed:2,damage:5,exp:15};
-
-    if(type==="beast")
-        return {...base,type,hp:90,speed:3,damage:10,exp:35};
-
-    if(type==="ghost")
-        return {...base,type,hp:70,speed:4,damage:8,exp:40};
-
-    if(type==="demon")
-        return {...base,type,hp:160,speed:2.5,damage:20,exp:80};
 }
 
 /* ================= MAGIC ================= */
@@ -123,7 +111,7 @@ function autoShoot(){
         let dx=e.x-player.x;
         let dy=e.y-player.y;
         let d=dx*dx+dy*dy;
-        if(d<best){ best=d; closest=e; }
+        if(d<best){best=d; closest=e;}
     }
 
     if(closest){
@@ -141,32 +129,19 @@ function autoShoot(){
         });
 
         player.cooldown=player.fireRate;
-        player.casting=10;
+        player.casting=12;
     }
 }
 
 /* ================= STAT SYSTEM ================= */
 
-function spendStat(key){
-    if(player.statPoints<=0) return;
+function spendStat(k){
+if(player.statPoints<=0) return;
 
-    if(key==="1"){
-        player.maxHp+=20;
-        player.hp=player.maxHp;
-        player.statPoints--;
-    }
-    if(key==="2"){
-        player.damage+=5;
-        player.statPoints--;
-    }
-    if(key==="3"){
-        player.speed+=1;
-        player.statPoints--;
-    }
-    if(key==="4"){
-        player.fireRate=Math.max(5,player.fireRate-3);
-        player.statPoints--;
-    }
+if(k==="1"){ player.maxHp+=20; player.hp=player.maxHp; player.statPoints--; }
+if(k==="2"){ player.damage+=5; player.statPoints--; }
+if(k==="3"){ player.speed+=1; player.statPoints--; }
+if(k==="4"){ player.fireRate=Math.max(5,player.fireRate-3); player.statPoints--; }
 }
 
 /* ================= UPDATE ================= */
@@ -177,15 +152,12 @@ if(gameState!=="game") return;
 
 let moving=false;
 
-if(keys["w"]){ player.y-=player.speed; moving=true; }
-if(keys["s"]){ player.y+=player.speed; moving=true; }
-if(keys["a"]){ player.x-=player.speed; moving=true; }
-if(keys["d"]){ player.x+=player.speed; moving=true; }
+if(keys["w"]){player.y-=player.speed; moving=true;}
+if(keys["s"]){player.y+=player.speed; moving=true;}
+if(keys["a"]){player.x-=player.speed; moving=true;}
+if(keys["d"]){player.x+=player.speed; moving=true;}
 
-if(moving) player.walkFrame+=0.2;
-
-player.x=Math.max(0,Math.min(WORLD_SIZE,player.x));
-player.y=Math.max(0,Math.min(WORLD_SIZE,player.y));
+if(moving) player.walk+=0.2;
 
 camera.x=player.x-(canvas.width/(2*ZOOM));
 camera.y=player.y-(canvas.height/(2*ZOOM));
@@ -195,7 +167,7 @@ if(player.casting>0) player.casting--;
 
 autoShoot();
 
-// bullets
+/* bullets */
 for(let i=bullets.length-1;i>=0;i--){
     let b=bullets[i];
     b.x+=b.dx;
@@ -206,7 +178,7 @@ for(let i=bullets.length-1;i>=0;i--){
 
     for(let j=enemies.length-1;j>=0;j--){
         let e=enemies[j];
-        if(Math.abs(b.x-e.x)<24 && Math.abs(b.y-e.y)<24){
+        if(Math.abs(b.x-e.x)<25 && Math.abs(b.y-e.y)<25){
             e.hp-=player.damage;
             bullets.splice(i,1);
             if(e.hp<=0){
@@ -220,13 +192,13 @@ for(let i=bullets.length-1;i>=0;i--){
     if(b.life<=0) bullets.splice(i,1);
 }
 
-// particles
+/* particles */
 for(let i=particles.length-1;i>=0;i--){
     particles[i].life--;
     if(particles[i].life<=0) particles.splice(i,1);
 }
 
-// enemies
+/* enemies */
 for(let e of enemies){
     let dx=player.x-e.x;
     let dy=player.y-e.y;
@@ -235,7 +207,7 @@ for(let e of enemies){
     e.y+=dy/dist*e.speed;
     e.anim+=0.1;
 
-    if(dist<30) player.hp-=e.damage*0.05;
+    if(dist<30) player.hp-=0.1;
 }
 
 if(enemies.length===0){
@@ -253,36 +225,108 @@ if(player.exp>=player.nextLevel){
 
 /* ================= DRAW ================= */
 
-function drawMenu(){
-    ctx.fillStyle="#111";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+function drawPlayer(x,y){
 
-    ctx.fillStyle="white";
-    ctx.font="48px Arial";
-    ctx.fillText("ARCANE ARENA",450,250);
+let legSwing=Math.sin(player.walk)*4;
+let castLift=player.casting>0?-6:0;
 
-    ctx.font="24px Arial";
-    ctx.fillText("Press ENTER to Start",520,350);
+/* legs */
+ctx.fillStyle="#444";
+ctx.fillRect(x+12,y+30+legSwing,8,18);
+ctx.fillRect(x+24,y+30-legSwing,8,18);
+
+/* robe */
+ctx.fillStyle="#2c5aa0";
+ctx.fillRect(x+10,y+12,28,22);
+
+/* belt */
+ctx.fillStyle="#1b3a6b";
+ctx.fillRect(x+10,y+26,28,4);
+
+/* head */
+ctx.fillStyle="#f1c27d";
+ctx.fillRect(x+14,y,20,14);
+
+/* hair */
+ctx.fillStyle="#4b2e19";
+ctx.fillRect(x+14,y,20,6);
+
+/* eyes */
+ctx.fillStyle="black";
+ctx.fillRect(x+18,y+6,3,3);
+ctx.fillRect(x+26,y+6,3,3);
+
+/* staff */
+ctx.fillStyle="#8b5a2b";
+ctx.fillRect(x+36,y+10+castLift,4,30);
+
+ctx.fillStyle="#00ccff";
+ctx.fillRect(x+32,y+4+castLift,12,8);
 }
 
-function drawStatsMenu(){
+function drawEnemy(e,x,y){
 
-    ctx.fillStyle="rgba(0,0,0,0.8)";
-    ctx.fillRect(350,120,580,480);
+let bounce=Math.sin(e.anim)*3;
 
+if(e.type==="slime"){
+    ctx.fillStyle="#3cff5a";
+    ctx.fillRect(x,y+20+bounce,40,20);
+}
+
+if(e.type==="beast"){
+    ctx.fillStyle="#6b3f1d";
+    ctx.fillRect(x,y+18+bounce,44,22);
     ctx.fillStyle="white";
-    ctx.font="28px Arial";
-    ctx.fillText("STAT MENU",560,170);
+    ctx.fillRect(x+10,y+12+bounce,6,6);
+    ctx.fillRect(x+26,y+12+bounce,6,6);
+}
 
-    ctx.font="20px Arial";
-    ctx.fillText("Stat Points: "+player.statPoints,520,210);
+if(e.type==="ghost"){
+    ctx.fillStyle="rgba(200,200,255,0.8)";
+    ctx.fillRect(x,y+12+bounce,40,28);
+}
 
-    ctx.fillText("1 - Max HP: "+player.maxHp,450,260);
-    ctx.fillText("2 - Damage: "+player.damage,450,300);
-    ctx.fillText("3 - Speed: "+player.speed,450,340);
-    ctx.fillText("4 - Cast Speed: "+(25-player.fireRate),450,380);
+if(e.type==="demon"){
+    ctx.fillStyle="#aa0000";
+    ctx.fillRect(x,y+14+bounce,40,24);
+    ctx.fillStyle="yellow";
+    ctx.fillRect(x+12,y+18+bounce,4,4);
+    ctx.fillRect(x+24,y+18+bounce,4,4);
+}
+}
 
-    ctx.fillText("Press P to Resume",520,450);
+function drawMenu(){
+ctx.fillStyle="black";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+let pulse=Math.sin(Date.now()*0.003)*10;
+
+ctx.fillStyle="#00ccff";
+ctx.font="60px Arial";
+ctx.fillText("ARCANE ARENA",350,280+pulse);
+
+ctx.font="24px Arial";
+ctx.fillStyle="white";
+ctx.fillText("Press ENTER to Begin",480,400);
+}
+
+function drawStats(){
+ctx.fillStyle="rgba(0,0,0,0.85)";
+ctx.fillRect(350,120,580,480);
+
+ctx.fillStyle="white";
+ctx.font="28px Arial";
+ctx.fillText("STAT MENU",560,170);
+
+ctx.font="20px Arial";
+ctx.fillText("Points: "+player.statPoints,550,210);
+
+ctx.fillText("1 - Max HP: "+player.maxHp,450,260);
+ctx.fillText("2 - Damage: "+player.damage,450,300);
+ctx.fillText("3 - Speed: "+player.speed,450,340);
+ctx.fillText("4 - Cast Speed: "+(25-player.fireRate),450,380);
+
+ctx.fillText("Press P to Resume",520,450);
 }
 
 function drawGame(){
@@ -293,7 +337,7 @@ ctx.save();
 ctx.scale(ZOOM,ZOOM);
 ctx.translate(-camera.x,-camera.y);
 
-// ground
+/* ground */
 for(let x=0;x<WORLD_SIZE;x+=128){
     for(let y=0;y<WORLD_SIZE;y+=128){
         ctx.fillStyle=((x+y)/128)%2?"#2a2a2a":"#242424";
@@ -301,23 +345,23 @@ for(let x=0;x<WORLD_SIZE;x+=128){
     }
 }
 
+for(let e of enemies) drawEnemy(e,e.x,e.y);
+
 ctx.fillStyle="#00ffff";
 for(let b of bullets) ctx.fillRect(b.x,b.y,6,6);
 
-ctx.fillStyle="#00aaff";
 for(let p of particles){
     ctx.globalAlpha=p.life/20;
+    ctx.fillStyle="#00aaff";
     ctx.fillRect(p.x,p.y,4,4);
     ctx.globalAlpha=1;
 }
 
-// simple player square for now
-ctx.fillStyle="#2c5aa0";
-ctx.fillRect(player.x,player.y,48,48);
+drawPlayer(player.x,player.y);
 
 ctx.restore();
 
-// UI
+/* UI */
 ctx.fillStyle="red";
 ctx.fillRect(20,20,300,20);
 ctx.fillStyle="lime";
@@ -336,27 +380,23 @@ ctx.fillText("Wave "+wave,20,105);
 function draw(){
 if(gameState==="menu") drawMenu();
 if(gameState==="game") drawGame();
-if(gameState==="stats"){ drawGame(); drawStatsMenu(); }
+if(gameState==="stats"){ drawGame(); drawStats(); }
 }
-
-/* ================= GAME START ================= */
 
 function startGame(){
-    player=createPlayer();
-    enemies=[];
-    bullets=[];
-    particles=[];
-    wave=1;
-    spawnWave();
-    gameState="game";
+player=createPlayer();
+enemies=[];
+bullets=[];
+particles=[];
+wave=1;
+spawnWave();
+gameState="game";
 }
 
-/* ================= LOOP ================= */
-
 function loop(){
-    update();
-    draw();
-    requestAnimationFrame(loop);
+update();
+draw();
+requestAnimationFrame(loop);
 }
 
 loop();
