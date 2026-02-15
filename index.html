@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Auto Shooter Arena</title>
+<title>Auto Shooter Level System</title>
 <style>
 body { margin:0; background:black; overflow:hidden; }
 canvas { display:block; margin:auto; background:#111; image-rendering:pixelated; }
@@ -32,18 +32,15 @@ let player = {
     health: 100,
     maxHealth: 100,
     angle: 0,
-    coins: 0
+    level: 1,
+    xp: 0,
+    xpNeeded: 20
 };
 
 let bullets = [];
 let enemies = [];
-let wave = 1;
-
-let shop = {
-    x: 80,
-    y: canvas.height - 80,
-    size: 50
-};
+let gamePaused = false;
+let levelChoices = [];
 
 function spawnEnemy() {
     let side = Math.floor(Math.random()*4);
@@ -54,13 +51,13 @@ function spawnEnemy() {
     if(side===2){ x=Math.random()*canvas.width; y=0; }
     if(side===3){ x=Math.random()*canvas.width; y=canvas.height; }
 
-    let type = Math.random();
-
-    if(type < 0.6){
-        enemies.push({x,y,size:26,speed:1.5+wave*0.1,health:3+wave});
-    } else {
-        enemies.push({x,y,size:40,speed:0.8+wave*0.1,health:8+wave*2});
-    }
+    enemies.push({
+        x,y,
+        size: 26,
+        speed: 1.5 + player.level*0.1,
+        health: 3 + player.level,
+        xpValue: 5
+    });
 }
 
 setInterval(spawnEnemy, 1200);
@@ -80,7 +77,51 @@ function shoot(target){
     player.angle = angle;
 }
 
+function levelUp(){
+    gamePaused = true;
+    player.level++;
+    player.xp = 0;
+    player.xpNeeded += 15;
+
+    levelChoices = [
+        "Damage Up",
+        "Fire Rate Up",
+        "Bullet Speed Up",
+        "Speed Up",
+        "Max Health Up"
+    ];
+}
+
+function applyUpgrade(choice){
+    if(choice === "Damage Up") player.damage++;
+    if(choice === "Fire Rate Up") player.fireRate = Math.max(5, player.fireRate-3);
+    if(choice === "Bullet Speed Up") player.bulletSpeed+=2;
+    if(choice === "Speed Up") player.speed+=0.5;
+    if(choice === "Max Health Up"){
+        player.maxHealth+=20;
+        player.health+=20;
+    }
+
+    gamePaused = false;
+}
+
+canvas.addEventListener("click", e=>{
+    if(!gamePaused) return;
+
+    let rect = canvas.getBoundingClientRect();
+    let mx = e.clientX - rect.left;
+    let my = e.clientY - rect.top;
+
+    levelChoices.forEach((choice,i)=>{
+        let y = 200 + i*60;
+        if(mx > 300 && mx < 600 && my > y-20 && my < y+20){
+            applyUpgrade(choice);
+        }
+    });
+});
+
 function update(){
+    if(gamePaused) return;
 
     // movement
     if(keys["w"]) player.y -= player.speed;
@@ -91,7 +132,7 @@ function update(){
     player.x = Math.max(0,Math.min(canvas.width,player.x));
     player.y = Math.max(0,Math.min(canvas.height,player.y));
 
-    // enemies move
+    // enemies
     enemies.forEach(e=>{
         let dx = player.x-e.x;
         let dy = player.y-e.y;
@@ -104,7 +145,7 @@ function update(){
         }
     });
 
-    // find closest
+    // closest
     let closest=null;
     let closestDist=Infinity;
 
@@ -118,7 +159,6 @@ function update(){
         }
     });
 
-    // auto shoot
     if(closest && player.cooldown<=0){
         shoot(closest);
         player.cooldown = player.fireRate;
@@ -126,7 +166,6 @@ function update(){
 
     if(player.cooldown>0) player.cooldown--;
 
-    // bullets
     bullets.forEach((b,bi)=>{
         b.x+=b.dx;
         b.y+=b.dy;
@@ -145,67 +184,57 @@ function update(){
                 bullets.splice(bi,1);
 
                 if(e.health<=0){
-                    player.coins+=5;
+                    player.xp += e.xpValue;
                     enemies.splice(ei,1);
+
+                    if(player.xp >= player.xpNeeded){
+                        levelUp();
+                    }
                 }
             }
         });
     });
 
-    // shop interaction
-    let dx = player.x - shop.x;
-    let dy = player.y - shop.y;
-    let dist = Math.sqrt(dx*dx+dy*dy);
-
-    if(dist < 60 && keys["e"]){
-        openShop();
-    }
-
-    if(player.health <=0){
+    if(player.health<=0){
         alert("Game Over");
         location.reload();
     }
 }
 
-function openShop(){
-    let choice = prompt(
-`UPGRADES (Coins: ${player.coins})
-1: +Damage (20)
-2: Faster Fire Rate (25)
-3: +Bullet Speed (20)
-4: +Max Health (30)
-5: Heal (15)`
-    );
+function drawUI(){
+    ctx.fillStyle="white";
+    ctx.font="18px monospace";
+    ctx.fillText("HP: "+Math.floor(player.health)+"/"+player.maxHealth,20,30);
+    ctx.fillText("Level: "+player.level,20,55);
 
-    if(choice==="1" && player.coins>=20){
-        player.damage++;
-        player.coins-=20;
-    }
-    if(choice==="2" && player.coins>=25){
-        player.fireRate = Math.max(5, player.fireRate-3);
-        player.coins-=25;
-    }
-    if(choice==="3" && player.coins>=20){
-        player.bulletSpeed+=2;
-        player.coins-=20;
-    }
-    if(choice==="4" && player.coins>=30){
-        player.maxHealth+=20;
-        player.health+=20;
-        player.coins-=30;
-    }
-    if(choice==="5" && player.coins>=15){
-        player.health = Math.min(player.maxHealth, player.health+30);
-        player.coins-=15;
-    }
+    // XP bar
+    ctx.fillStyle="gray";
+    ctx.fillRect(20,70,200,15);
+    ctx.fillStyle="lime";
+    ctx.fillRect(20,70,(player.xp/player.xpNeeded)*200,15);
+}
+
+function drawLevelMenu(){
+    ctx.fillStyle="rgba(0,0,0,0.8)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    ctx.fillStyle="white";
+    ctx.font="30px monospace";
+    ctx.fillText("LEVEL UP!",350,120);
+
+    ctx.font="20px monospace";
+    levelChoices.forEach((choice,i)=>{
+        let y = 200 + i*60;
+        ctx.fillStyle="white";
+        ctx.fillRect(300,y-20,300,40);
+        ctx.fillStyle="black";
+        ctx.fillText(choice,350,y+5);
+    });
 }
 
 function drawPlayer(){
     ctx.fillStyle="#00ffcc";
     ctx.fillRect(player.x-14,player.y-14,28,28);
-
-    ctx.fillStyle="#003333";
-    ctx.fillRect(player.x-6,player.y-6,12,12);
 
     ctx.save();
     ctx.translate(player.x,player.y);
@@ -217,8 +246,8 @@ function drawPlayer(){
 
 function drawEnemies(){
     enemies.forEach(e=>{
-        ctx.fillStyle=e.size>30?"purple":"red";
-        ctx.fillRect(e.x-e.size/2,e.y-e.size/2,e.size,e.size);
+        ctx.fillStyle="red";
+        ctx.fillRect(e.x-13,e.y-13,26,26);
     });
 }
 
@@ -229,29 +258,14 @@ function drawBullets(){
     });
 }
 
-function drawShop(){
-    ctx.fillStyle="gold";
-    ctx.fillRect(shop.x-25,shop.y-25,50,50);
-
-    ctx.fillStyle="black";
-    ctx.font="16px monospace";
-    ctx.fillText("SHOP (E)",shop.x-40,shop.y-40);
-}
-
-function drawUI(){
-    ctx.fillStyle="white";
-    ctx.font="18px monospace";
-    ctx.fillText("HP: "+Math.floor(player.health)+"/"+player.maxHealth,20,30);
-    ctx.fillText("Coins: "+player.coins,20,55);
-}
-
 function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     drawPlayer();
     drawEnemies();
     drawBullets();
-    drawShop();
     drawUI();
+
+    if(gamePaused) drawLevelMenu();
 }
 
 function loop(){
