@@ -2,11 +2,11 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Neon Arena</title>
+<title>Auto Slash Arena</title>
 <style>
 body {
     margin: 0;
-    background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+    background: radial-gradient(circle at center, #111 0%, #000 100%);
     overflow: hidden;
 }
 canvas {
@@ -26,103 +26,114 @@ const ctx = canvas.getContext("2d");
 canvas.width = 900;
 canvas.height = 600;
 
+let state = "game";
+let wave = 1;
+
 let player = {
     x: canvas.width/2,
     y: canvas.height/2,
     radius: 18,
     speed: 4,
     health: 100,
-    shootCooldown: 0
+    maxHealth: 100,
+    damage: 1,
+    slashCooldown: 0,
+    slashRange: 70
 };
 
 let enemies = [];
-let bullets = [];
-let wave = 1;
+let keys = {};
+
+document.addEventListener("keydown", e => {
+    keys[e.key] = true;
+
+    if (state === "shop") {
+        if (e.key === "1") buyUpgrade(0);
+        if (e.key === "2") buyUpgrade(1);
+        if (e.key === "3") buyUpgrade(2);
+        if (e.key === "Enter") startNextWave();
+    }
+});
+
+document.addEventListener("keyup", e => keys[e.key] = false);
 
 function spawnWave() {
-    for (let i = 0; i < wave + 3; i++) {
-        enemies.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            radius: 16,
-            speed: 1 + wave * 0.2,
-            health: 3
-        });
+    for (let i = 0; i < wave + 2; i++) {
+        let type = Math.random();
+
+        if (type < 0.5) {
+            enemies.push({
+                x: Math.random()*canvas.width,
+                y: Math.random()*canvas.height,
+                radius: 16,
+                speed: 1.5 + wave*0.05,
+                health: 3 + wave*0.3,
+                color: "#ff0055"
+            });
+        } 
+        else if (type < 0.8) {
+            enemies.push({
+                x: Math.random()*canvas.width,
+                y: Math.random()*canvas.height,
+                radius: 24,
+                speed: 0.8,
+                health: 10 + wave,
+                color: "#aa00ff"
+            });
+        } 
+        else {
+            enemies.push({
+                x: Math.random()*canvas.width,
+                y: Math.random()*canvas.height,
+                radius: 14,
+                speed: 3,
+                health: 2 + wave*0.2,
+                color: "#ffff00"
+            });
+        }
     }
 }
 
 spawnWave();
 
-let keys = {};
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
+function autoSlash() {
+    if (player.slashCooldown > 0) return;
 
-function getClosestEnemy() {
-    let closest = null;
-    let minDist = Infinity;
+    let hitSomething = false;
 
-    enemies.forEach(enemy => {
-        let dx = enemy.x - player.x;
-        let dy = enemy.y - player.y;
+    enemies.forEach((e, i) => {
+        let dx = e.x - player.x;
+        let dy = e.y - player.y;
         let dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < minDist) {
-            minDist = dist;
-            closest = enemy;
+
+        if (dist < player.slashRange) {
+            e.health -= player.damage;
+            hitSomething = true;
+
+            if (e.health <= 0) enemies.splice(i,1);
         }
     });
 
-    return closest;
-}
-
-function shoot() {
-    if (player.shootCooldown > 0) return;
-
-    let target = getClosestEnemy();
-    if (!target) return;
-
-    let dx = target.x - player.x;
-    let dy = target.y - player.y;
-    let dist = Math.sqrt(dx*dx + dy*dy);
-
-    bullets.push({
-        x: player.x,
-        y: player.y,
-        vx: dx/dist * 7,
-        vy: dy/dist * 7,
-        radius: 5
-    });
-
-    player.shootCooldown = 15;
+    if (hitSomething) {
+        player.slashCooldown = 30;
+    }
 }
 
 function update() {
+
+    if (state !== "game") return;
 
     if (keys["w"] || keys["ArrowUp"]) player.y -= player.speed;
     if (keys["s"] || keys["ArrowDown"]) player.y += player.speed;
     if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
     if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
 
-    player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
-    player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+    player.x = Math.max(player.radius, Math.min(canvas.width-player.radius, player.x));
+    player.y = Math.max(player.radius, Math.min(canvas.height-player.radius, player.y));
 
-    shoot();
+    autoSlash();
 
-    if (player.shootCooldown > 0) player.shootCooldown--;
-
-    bullets.forEach((b, i) => {
-        b.x += b.vx;
-        b.y += b.vy;
-
-        enemies.forEach((e, ei) => {
-            let dx = b.x - e.x;
-            let dy = b.y - e.y;
-            if (Math.sqrt(dx*dx + dy*dy) < b.radius + e.radius) {
-                e.health--;
-                bullets.splice(i,1);
-                if (e.health <= 0) enemies.splice(ei,1);
-            }
-        });
-    });
+    if (player.slashCooldown > 0) player.slashCooldown--;
 
     enemies.forEach(e => {
         let dx = player.x - e.x;
@@ -133,13 +144,12 @@ function update() {
         e.y += dy/dist * e.speed;
 
         if (dist < e.radius + player.radius) {
-            player.health -= 0.2;
+            player.health -= 0.3;
         }
     });
 
     if (enemies.length === 0) {
-        wave++;
-        spawnWave();
+        state = "shop";
     }
 
     if (player.health <= 0) {
@@ -148,46 +158,75 @@ function update() {
     }
 }
 
-function drawGlowCircle(x, y, radius, color) {
+function buyUpgrade(option) {
+    if (option === 0) player.damage += 1;
+    if (option === 1) player.speed += 0.5;
+    if (option === 2) {
+        player.maxHealth += 20;
+        player.health = player.maxHealth;
+    }
+}
+
+function startNextWave() {
+    wave++;
+    spawnWave();
+    state = "game";
+}
+
+function drawGlowCircle(x,y,r,color) {
     ctx.shadowBlur = 20;
     ctx.shadowColor = color;
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI*2);
+    ctx.arc(x,y,r,0,Math.PI*2);
     ctx.fill();
     ctx.shadowBlur = 0;
 }
 
 function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    // Arena border
-    ctx.strokeStyle = "#00ffff";
-    ctx.lineWidth = 4;
-    ctx.strokeRect(5,5,canvas.width-10,canvas.height-10);
+    if (state === "game") {
 
-    // Player
-    drawGlowCircle(player.x, player.y, player.radius, "#00f7ff");
+        ctx.strokeStyle = "#00ffff";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(5,5,canvas.width-10,canvas.height-10);
 
-    // Enemies
-    enemies.forEach(e => {
-        drawGlowCircle(e.x, e.y, e.radius, "#ff0055");
-    });
+        drawGlowCircle(player.x,player.y,player.radius,"#00f7ff");
 
-    // Bullets
-    bullets.forEach(b => {
-        drawGlowCircle(b.x, b.y, b.radius, "#ffffff");
-    });
+        enemies.forEach(e => {
+            drawGlowCircle(e.x,e.y,e.radius,e.color);
+        });
 
-    // Health Bar
-    ctx.fillStyle = "red";
-    ctx.fillRect(20, 20, 200, 15);
-    ctx.fillStyle = "lime";
-    ctx.fillRect(20, 20, player.health * 2, 15);
+        if (player.slashCooldown > 20) {
+            ctx.strokeStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(player.x,player.y,player.slashRange,0,Math.PI*2);
+            ctx.stroke();
+        }
 
-    ctx.fillStyle = "white";
-    ctx.font = "18px Arial";
-    ctx.fillText("Wave: " + wave, 20, 60);
+        ctx.fillStyle="red";
+        ctx.fillRect(20,20,200,15);
+        ctx.fillStyle="lime";
+        ctx.fillRect(20,20,(player.health/player.maxHealth)*200,15);
+
+        ctx.fillStyle="white";
+        ctx.font="18px Arial";
+        ctx.fillText("Wave: "+wave,20,60);
+        ctx.fillText("Damage: "+player.damage,20,85);
+    }
+
+    else if (state === "shop") {
+        ctx.fillStyle="white";
+        ctx.font="30px Arial";
+        ctx.fillText("SHOP - Wave Cleared!", 300,150);
+
+        ctx.font="20px Arial";
+        ctx.fillText("Press 1: +1 Damage", 350,250);
+        ctx.fillText("Press 2: +Speed", 350,290);
+        ctx.fillText("Press 3: +20 Max Health", 350,330);
+        ctx.fillText("Press ENTER to continue", 320,400);
+    }
 }
 
 function gameLoop() {
