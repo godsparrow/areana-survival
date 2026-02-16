@@ -42,7 +42,6 @@ button {
  cursor:pointer;
 }
 button:hover { background:#4664d8; }
-
 </style>
 </head>
 <body>
@@ -62,10 +61,10 @@ button:hover { background:#4664d8; }
 </div>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
 
 let paused=false;
 let keys={};
@@ -73,7 +72,9 @@ let keys={};
 let player={
  x:0,y:0,
  hp:100,maxHp:100,
- exp:0,level:1,points:5,
+ exp:0,
+ level:1,
+ points:0,
  damage:12,
  speed:2.5,
  fireRate:600,
@@ -86,7 +87,6 @@ let bullets=[];
 let particles=[];
 let expToLevel=50;
 
-// ===== Controls =====
 document.addEventListener("keydown",e=>{
  if(e.key==="Tab"){
   e.preventDefault();
@@ -94,9 +94,7 @@ document.addEventListener("keydown",e=>{
  }
  keys[e.key.toLowerCase()]=true;
 });
-document.addEventListener("keyup",e=>{
- keys[e.key.toLowerCase()]=false;
-});
+document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
 
 function toggleStats(){
  paused=!paused;
@@ -104,21 +102,17 @@ function toggleStats(){
  updateStatsUI();
 }
 
-// ===== Upgrade System =====
 function upgrade(stat){
  if(player.points<=0) return;
 
  if(stat==="damage") player.damage+=4;
-
- if(stat==="speed"){
-  player.speed+=0.5;
- }
+ if(stat==="speed") player.speed+=0.4;
 
  if(stat==="rate"){
   if(player.fireRate>300){
    player.fireRate-=50;
   } else {
-   player.fireRate=Math.max(60,player.fireRate/2);
+   player.fireRate=Math.max(80,player.fireRate/2);
   }
  }
 
@@ -133,31 +127,22 @@ function updateStatsUI(){
  document.getElementById("rateStat").innerText=Math.floor(player.fireRate);
 }
 
-// ===== Enemy Spawning =====
 function spawnEnemy(){
- const types=[
-  {type:"slime",size:26,hp:40,color:"#48ff7a"},
-  {type:"goblin",size:28,hp:60,color:"#2faa2f"},
-  {type:"demon",size:34,hp:90,color:"#aa2222"},
-  {type:"ghost",size:24,hp:50,color:"#9999ff"}
- ];
-
- const t=types[Math.floor(Math.random()*types.length)];
+ const types=["slime","goblin","demon","ghost"];
+ const type=types[Math.floor(Math.random()*types.length)];
 
  enemies.push({
   x:(Math.random()-0.5)*1200,
   y:(Math.random()-0.5)*1200,
-  size:t.size,
-  hp:t.hp,
-  maxHp:t.hp,
-  type:t.type,
+  type:type,
+  hp: type==="demon"?100:type==="goblin"?70:type==="ghost"?60:50,
+  maxHp: type==="demon"?100:type==="goblin"?70:type==="ghost"?60:50,
   showHP:0
  });
 }
 
 for(let i=0;i<8;i++) spawnEnemy();
 
-// ===== Game Loop =====
 function loop(){
  requestAnimationFrame(loop);
  if(paused) return;
@@ -191,13 +176,13 @@ function update(){
   b.y+=b.dy;
 
   enemies.forEach(e=>{
-   if(Math.hypot(b.x-e.x,b.y-e.y)<e.size/2){
+   if(Math.hypot(b.x-e.x,b.y-e.y)<20){
     e.hp-=player.damage;
     e.showHP=60;
     b.dead=true;
 
     if(e.hp<=0){
-     player.exp+=20;
+     player.exp+=25;
      enemies.splice(enemies.indexOf(e),1);
      spawnEnemy();
     }
@@ -208,11 +193,23 @@ function update(){
  });
 
  bullets=bullets.filter(b=>!b.dead);
+
  particles.forEach(p=>p.life--);
  particles=particles.filter(p=>p.life>0);
 
- document.getElementById("hpFill").style.width=(player.hp/player.maxHp*100)+"%";
- document.getElementById("expFill").style.width=(player.exp/expToLevel*100)+"%";
+ // ===== FIXED LEVEL SYSTEM =====
+ while(player.exp >= expToLevel){
+  player.exp -= expToLevel;
+  player.level++;
+  player.points += 3;
+  expToLevel = Math.floor(expToLevel * 1.3);
+ }
+
+ document.getElementById("hpFill").style.width =
+  Math.max(0,(player.hp/player.maxHp*100))+"%";
+
+ document.getElementById("expFill").style.width =
+  Math.min(100,(player.exp/expToLevel*100))+"%";
 }
 
 function autoAim(){
@@ -238,7 +235,6 @@ function autoAim(){
  player.lastShot=Date.now();
 }
 
-// ===== Drawing =====
 function draw(){
  ctx.clearRect(0,0,canvas.width,canvas.height);
  ctx.save();
@@ -264,67 +260,72 @@ function draw(){
  ctx.restore();
 }
 
-// ===== Pixel Styled Player =====
 function drawPlayer(){
  const bob=Math.sin(player.anim)*2;
 
- // Legs
- ctx.fillStyle="#1a1a1a";
- ctx.fillRect(player.x-6,player.y+6+bob,6,12);
- ctx.fillRect(player.x,player.y+6-bob,6,12);
+ ctx.fillStyle="#000"; 
+ ctx.fillRect(player.x-11,player.y-21,22,34);
 
- // Robe
  ctx.fillStyle="#3b5cff";
  ctx.fillRect(player.x-10,player.y-8,20,18);
+
  ctx.fillStyle="#2a3fb5";
  ctx.fillRect(player.x-10,player.y-8,4,18);
 
- // Head
  ctx.fillStyle="#f1c27d";
  ctx.fillRect(player.x-6,player.y-20,12,12);
 
- // Hair
  ctx.fillStyle="#5a3a1a";
  ctx.fillRect(player.x-6,player.y-20,12,4);
 
- // Staff
  ctx.fillStyle="#7a4a2a";
  ctx.fillRect(player.x+10,player.y-6,4,24);
+
  ctx.fillStyle="#00e0ff";
  ctx.fillRect(player.x+8,player.y-12,8,6);
 }
 
-// ===== Pixel Enemies =====
+// ===== IMPROVED ENEMIES =====
 function drawEnemy(e){
- const y=e.y+Math.sin(Date.now()*0.005)*2;
+ let y=e.y+Math.sin(Date.now()*0.004)*2;
+
+ ctx.fillStyle="#000";
 
  if(e.type==="slime"){
+  ctx.fillRect(e.x-16,y-12,32,24);
   ctx.fillStyle="#3ddc6f";
-  ctx.fillRect(e.x-12,y-10,24,20);
+  ctx.fillRect(e.x-14,y-10,28,20);
+  ctx.fillStyle="#7effa6";
+  ctx.fillRect(e.x-6,y-6,6,6);
  }
 
  if(e.type==="goblin"){
+  ctx.fillRect(e.x-14,y-16,28,32);
   ctx.fillStyle="#2faa2f";
-  ctx.fillRect(e.x-10,y-12,20,24);
+  ctx.fillRect(e.x-12,y-14,24,28);
   ctx.fillStyle="#145a14";
-  ctx.fillRect(e.x-10,y-12,4,24);
+  ctx.fillRect(e.x-12,y-14,5,28);
  }
 
  if(e.type==="demon"){
+  ctx.fillRect(e.x-18,y-18,36,36);
   ctx.fillStyle="#aa2222";
-  ctx.fillRect(e.x-14,y-14,28,28);
-  ctx.fillStyle="#661111";
-  ctx.fillRect(e.x-14,y-14,6,28);
+  ctx.fillRect(e.x-16,y-16,32,32);
+  ctx.fillStyle="#ff4444";
+  ctx.fillRect(e.x-6,y-6,4,4);
  }
 
  if(e.type==="ghost"){
+  ctx.fillRect(e.x-14,y-18,28,36);
   ctx.fillStyle="#bbbbff";
-  ctx.fillRect(e.x-10,y-12,20,24);
+  ctx.fillRect(e.x-12,y-16,24,32);
+  ctx.fillStyle="#ff0000";
+  ctx.fillRect(e.x-4,y-6,4,4);
  }
 
  if(e.showHP>0){
   ctx.fillStyle="red";
-  ctx.fillRect(e.x-15,y-20,30*(e.hp/e.maxHp),4);
+  ctx.fillRect(e.x-15,y-24,30*(e.hp/e.maxHp),4);
  }
 }
 
