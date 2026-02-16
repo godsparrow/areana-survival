@@ -1,5 +1,5 @@
 // ======================================
-// TOP DOWN RPG - HUMANOID + AUTO AIM
+// CLEAN WORKING TOP-DOWN RPG ENGINE
 // ======================================
 
 const canvas = document.getElementById("gameCanvas");
@@ -14,33 +14,26 @@ const TILE = 64;
 
 let camera = { x: 0, y: 0 };
 let keys = {};
-let paused = false;
 
 let enemies = [];
 let projectiles = [];
-let drops = [];
 
 // ================= PLAYER =================
 
 let player = {
     x: 2500,
     y: 2500,
-    size: 64,
     speed: 4,
-    hp: 100,
-    damage: 20,
-    lastShot: 0,
-    shootCooldown: 500,
+    damage: 25,
     frame: 0,
-    tick: 0
+    tick: 0,
+    lastShot: 0,
+    shootCooldown: 500
 };
 
 // ================= INPUT =================
 
-document.addEventListener("keydown", e => {
-    keys[e.key] = true;
-    if (e.key === "p") paused = !paused;
-});
+document.addEventListener("keydown", e => keys[e.key] = true);
 document.addEventListener("keyup", e => keys[e.key] = false);
 
 // ================= WORLD =================
@@ -68,7 +61,7 @@ function drawWorld() {
     }
 }
 
-// ================= PLAYER UPDATE =================
+// ================= PLAYER =================
 
 function updatePlayer() {
 
@@ -90,8 +83,6 @@ function updatePlayer() {
     camera.x = player.x - canvas.width / 2;
     camera.y = player.y - canvas.height / 2;
 }
-
-// ================= HUMANOID DRAW =================
 
 function drawPlayer() {
 
@@ -131,27 +122,32 @@ function drawPlayer() {
 // ================= ENEMIES =================
 
 function spawnEnemy() {
-    let elite = Math.random() < 0.15;
+
+    let angle = Math.random() * Math.PI * 2;
+    let distance = 300 + Math.random() * 200;
 
     enemies.push({
-        x: Math.random() * WORLD_WIDTH,
-        y: Math.random() * WORLD_HEIGHT,
-        hp: elite ? 200 : 100,
-        speed: elite ? 2.5 : 1.5,
-        elite: elite
+        x: player.x + Math.cos(angle) * distance,
+        y: player.y + Math.sin(angle) * distance,
+        hp: 100,
+        speed: 1.5
     });
 }
 
 function updateEnemies() {
+
     enemies.forEach((enemy, ei) => {
 
         let dx = player.x - enemy.x;
         let dy = player.y - enemy.y;
         let dist = Math.sqrt(dx*dx + dy*dy);
 
-        enemy.x += dx/dist * enemy.speed;
-        enemy.y += dy/dist * enemy.speed;
+        if (dist > 0) {
+            enemy.x += (dx/dist) * enemy.speed;
+            enemy.y += (dy/dist) * enemy.speed;
+        }
 
+        // projectile collision
         projectiles.forEach((p, pi) => {
             let pdx = p.x - enemy.x;
             let pdy = p.y - enemy.y;
@@ -162,6 +158,7 @@ function updateEnemies() {
 
                 if (enemy.hp <= 0) {
                     enemies.splice(ei,1);
+                    spawnEnemy(); // keep enemies coming
                 }
             }
         });
@@ -174,18 +171,10 @@ function drawEnemies() {
         let ex = enemy.x - camera.x;
         let ey = enemy.y - camera.y;
 
-        ctx.fillStyle = enemy.elite ? "#ff4444" : "#6a1b9a";
+        ctx.fillStyle = "#6a1b9a";
         ctx.beginPath();
         ctx.arc(ex, ey, 20, 0, Math.PI*2);
         ctx.fill();
-
-        if (enemy.elite) {
-            ctx.strokeStyle = "yellow";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(ex, ey, 26, 0, Math.PI*2);
-            ctx.stroke();
-        }
     });
 }
 
@@ -198,26 +187,34 @@ function autoShoot() {
     let now = Date.now();
     if (now - player.lastShot < player.shootCooldown) return;
 
-    let closest = enemies[0];
+    let closest = null;
     let minDist = Infinity;
 
     enemies.forEach(enemy => {
         let dx = enemy.x - player.x;
         let dy = enemy.y - player.y;
         let dist = Math.sqrt(dx*dx + dy*dy);
+
         if (dist < minDist) {
             minDist = dist;
             closest = enemy;
         }
     });
 
-    let angle = Math.atan2(closest.y - player.y, closest.x - player.x);
+    if (!closest) return;
+
+    let dx = closest.x - player.x;
+    let dy = closest.y - player.y;
+    let length = Math.sqrt(dx*dx + dy*dy);
+    if (length === 0) return;
+
+    let speed = 8;
 
     projectiles.push({
         x: player.x,
         y: player.y,
-        dx: Math.cos(angle) * 6,
-        dy: Math.sin(angle) * 6,
+        dx: (dx / length) * speed,
+        dy: (dy / length) * speed,
         life: 120
     });
 
@@ -229,7 +226,10 @@ function updateProjectiles() {
         p.x += p.dx;
         p.y += p.dy;
         p.life--;
-        if (p.life <= 0) projectiles.splice(i,1);
+
+        if (p.life <= 0) {
+            projectiles.splice(i,1);
+        }
     });
 }
 
@@ -240,16 +240,17 @@ function drawProjectiles() {
 
         ctx.fillStyle = "cyan";
         ctx.beginPath();
-        ctx.arc(px, py, 6, 0, Math.PI*2);
+        ctx.arc(px, py, 10, 0, Math.PI * 2);
         ctx.fill();
+
+        ctx.strokeStyle = "white";
+        ctx.stroke();
     });
 }
 
 // ================= LOOP =================
 
 function update() {
-    if (paused) return;
-
     updatePlayer();
     updateEnemies();
     autoShoot();
@@ -265,7 +266,7 @@ function draw() {
     drawPlayer();
 }
 
-for (let i=0;i<15;i++) spawnEnemy();
+for (let i=0;i<6;i++) spawnEnemy();
 
 function gameLoop(){
     update();
