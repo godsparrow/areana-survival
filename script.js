@@ -1,3 +1,7 @@
+// ======================================
+// TOP DOWN RPG - HUMANOID + AUTO AIM
+// ======================================
+
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
@@ -6,14 +10,17 @@ canvas.height = 600;
 
 const WORLD_WIDTH = 5000;
 const WORLD_HEIGHT = 5000;
-const TILE_SIZE = 64;
+const TILE = 64;
 
 let camera = { x: 0, y: 0 };
-let paused = false;
 let keys = {};
+let paused = false;
+
 let enemies = [];
 let projectiles = [];
 let drops = [];
+
+// ================= PLAYER =================
 
 let player = {
     x: 2500,
@@ -21,19 +28,14 @@ let player = {
     size: 64,
     speed: 4,
     hp: 100,
-    maxHp: 100,
-    damage: 15,
-    spell: "arcane",
+    damage: 20,
+    lastShot: 0,
+    shootCooldown: 500,
     frame: 0,
-    tick: 0,
-    inventory: [],
-    equipment: {
-        helmet: null,
-        chest: null,
-        staff: null,
-        ring: null
-    }
+    tick: 0
 };
+
+// ================= INPUT =================
 
 document.addEventListener("keydown", e => {
     keys[e.key] = true;
@@ -44,31 +46,32 @@ document.addEventListener("keyup", e => keys[e.key] = false);
 // ================= WORLD =================
 
 function drawWorld() {
-    for (let x = 0; x < WORLD_WIDTH; x += TILE_SIZE) {
-        for (let y = 0; y < WORLD_HEIGHT; y += TILE_SIZE) {
+    for (let x = 0; x < WORLD_WIDTH; x += TILE) {
+        for (let y = 0; y < WORLD_HEIGHT; y += TILE) {
 
             let sx = x - camera.x;
             let sy = y - camera.y;
 
-            if (sx > -TILE_SIZE && sx < canvas.width &&
-                sy > -TILE_SIZE && sy < canvas.height) {
+            if (sx > -TILE && sx < canvas.width &&
+                sy > -TILE && sy < canvas.height) {
 
                 ctx.fillStyle = "#3c9c3c";
-                ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+                ctx.fillRect(sx, sy, TILE, TILE);
 
                 ctx.fillStyle = "#2f7f2f";
-                ctx.fillRect(sx, sy + 48, TILE_SIZE, 16);
+                ctx.fillRect(sx, sy + 48, TILE, 16);
 
                 ctx.fillStyle = "#4fbf4f";
-                ctx.fillRect(sx, sy, TILE_SIZE, 10);
+                ctx.fillRect(sx, sy, TILE, 10);
             }
         }
     }
 }
 
-// ================= PLAYER =================
+// ================= PLAYER UPDATE =================
 
 function updatePlayer() {
+
     let moving = false;
 
     if (keys["w"]) { player.y -= player.speed; moving = true; }
@@ -79,7 +82,7 @@ function updatePlayer() {
     if (moving) {
         player.tick++;
         if (player.tick > 8) {
-            player.frame = (player.frame + 1) % 4;
+            player.frame = (player.frame + 1) % 2;
             player.tick = 0;
         }
     }
@@ -88,41 +91,41 @@ function updatePlayer() {
     camera.y = player.y - canvas.height / 2;
 }
 
+// ================= HUMANOID DRAW =================
+
 function drawPlayer() {
 
-    let px = player.x - camera.x - 32;
-    let py = player.y - camera.y - 32;
+    let px = player.x - camera.x;
+    let py = player.y - camera.y;
 
-    ctx.fillStyle = "#4fa3ff";
-    ctx.fillRect(px, py, 64, 64);
-
+    // legs (animated)
     ctx.fillStyle = "#2e6fa8";
-    ctx.fillRect(px, py + 42, 64, 22);
+    ctx.fillRect(px - 14, py + 10 + (player.frame === 0 ? 0 : 4), 10, 20);
+    ctx.fillRect(px + 4, py + 10 + (player.frame === 0 ? 4 : 0), 10, 20);
 
-    ctx.fillStyle = "#6ec6ff";
-    ctx.fillRect(px + 8, py + 8, 48, 16);
+    // body
+    ctx.fillStyle = "#4fa3ff";
+    ctx.fillRect(px - 18, py - 10, 36, 30);
 
-    if (player.equipment.helmet) {
-        ctx.fillStyle = player.equipment.helmet.color;
-        ctx.fillRect(px + 12, py + 6, 40, 18);
-    }
+    // shading
+    ctx.fillStyle = "#2e6fa8";
+    ctx.fillRect(px - 18, py + 5, 36, 15);
 
-    if (player.equipment.chest) {
-        ctx.fillStyle = player.equipment.chest.color;
-        ctx.fillRect(px + 10, py + 28, 44, 26);
-    }
+    // head
+    ctx.fillStyle = "#ffd7a8";
+    ctx.fillRect(px - 12, py - 30, 24, 20);
 
-    if (player.equipment.staff) {
-        ctx.fillStyle = "#8b5a2b";
-        ctx.fillRect(px + 52, py + 20, 10, 28);
-    }
+    ctx.fillStyle = "#e6b98f";
+    ctx.fillRect(px - 12, py - 20, 24, 10);
 
-    if (player.equipment.ring) {
-        ctx.strokeStyle = player.equipment.ring.color;
-        ctx.beginPath();
-        ctx.arc(px + 32, py + 32, 38, 0, Math.PI * 2);
-        ctx.stroke();
-    }
+    // staff
+    ctx.fillStyle = "#8b5a2b";
+    ctx.fillRect(px + 20, py - 10, 6, 40);
+
+    ctx.fillStyle = "cyan";
+    ctx.beginPath();
+    ctx.arc(px + 23, py - 15, 6, 0, Math.PI * 2);
+    ctx.fill();
 }
 
 // ================= ENEMIES =================
@@ -133,57 +136,98 @@ function spawnEnemy() {
     enemies.push({
         x: Math.random() * WORLD_WIDTH,
         y: Math.random() * WORLD_HEIGHT,
-        size: 64,
-        hp: elite ? 220 : 120,
-        speed: elite ? 2.5 : 1.6,
+        hp: elite ? 200 : 100,
+        speed: elite ? 2.5 : 1.5,
         elite: elite
     });
 }
 
 function updateEnemies() {
-    enemies.forEach(enemy => {
+    enemies.forEach((enemy, ei) => {
+
         let dx = player.x - enemy.x;
         let dy = player.y - enemy.y;
         let dist = Math.sqrt(dx*dx + dy*dy);
 
         enemy.x += dx/dist * enemy.speed;
         enemy.y += dy/dist * enemy.speed;
+
+        projectiles.forEach((p, pi) => {
+            let pdx = p.x - enemy.x;
+            let pdy = p.y - enemy.y;
+
+            if (Math.sqrt(pdx*pdx + pdy*pdy) < 20) {
+                enemy.hp -= player.damage;
+                projectiles.splice(pi,1);
+
+                if (enemy.hp <= 0) {
+                    enemies.splice(ei,1);
+                }
+            }
+        });
     });
 }
 
 function drawEnemies() {
     enemies.forEach(enemy => {
 
-        let ex = enemy.x - camera.x - 32;
-        let ey = enemy.y - camera.y - 32;
+        let ex = enemy.x - camera.x;
+        let ey = enemy.y - camera.y;
 
         ctx.fillStyle = enemy.elite ? "#ff4444" : "#6a1b9a";
-        ctx.fillRect(ex, ey, 64, 64);
-
-        ctx.fillStyle = enemy.elite ? "#ff7777" : "#9c4dcc";
-        ctx.fillRect(ex + 8, ey + 8, 48, 16);
+        ctx.beginPath();
+        ctx.arc(ex, ey, 20, 0, Math.PI*2);
+        ctx.fill();
 
         if (enemy.elite) {
             ctx.strokeStyle = "yellow";
             ctx.lineWidth = 3;
-            ctx.strokeRect(ex - 3, ey - 3, 70, 70);
+            ctx.beginPath();
+            ctx.arc(ex, ey, 26, 0, Math.PI*2);
+            ctx.stroke();
         }
     });
 }
 
-// ================= SPELLS =================
+// ================= AUTO AIM =================
 
-function castSpell() {
+function autoShoot() {
+
+    if (enemies.length === 0) return;
+
+    let now = Date.now();
+    if (now - player.lastShot < player.shootCooldown) return;
+
+    let closest = enemies[0];
+    let minDist = Infinity;
+
+    enemies.forEach(enemy => {
+        let dx = enemy.x - player.x;
+        let dy = enemy.y - player.y;
+        let dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < minDist) {
+            minDist = dist;
+            closest = enemy;
+        }
+    });
+
+    let angle = Math.atan2(closest.y - player.y, closest.x - player.x);
+
     projectiles.push({
         x: player.x,
         y: player.y,
-        type: player.spell,
-        life: 80
+        dx: Math.cos(angle) * 6,
+        dy: Math.sin(angle) * 6,
+        life: 120
     });
+
+    player.lastShot = now;
 }
 
 function updateProjectiles() {
     projectiles.forEach((p,i) => {
+        p.x += p.dx;
+        p.y += p.dy;
         p.life--;
         if (p.life <= 0) projectiles.splice(i,1);
     });
@@ -194,79 +238,11 @@ function drawProjectiles() {
         let px = p.x - camera.x;
         let py = p.y - camera.y;
 
-        if (p.type === "arcane") ctx.fillStyle = "cyan";
-        if (p.type === "fire") ctx.fillStyle = "orange";
-        if (p.type === "lightning") ctx.fillStyle = "yellow";
-
+        ctx.fillStyle = "cyan";
         ctx.beginPath();
-        ctx.arc(px, py, 10, 0, Math.PI*2);
+        ctx.arc(px, py, 6, 0, Math.PI*2);
         ctx.fill();
     });
-}
-
-// ================= DROPS =================
-
-function dropLoot(x,y) {
-    if (Math.random() < 0.5) {
-
-        let types = ["helmet","chest","ring"];
-        let type = types[Math.floor(Math.random()*types.length)];
-
-        drops.push({
-            x:x,
-            y:y,
-            type:type,
-            color:["#aaa","#00ffcc","#ff00ff"][Math.floor(Math.random()*3)]
-        });
-    }
-}
-
-function drawDrops() {
-    drops.forEach(drop => {
-        ctx.fillStyle = drop.color;
-        ctx.fillRect(drop.x - camera.x - 12, drop.y - camera.y - 12, 24, 24);
-    });
-}
-
-// ================= INVENTORY PANEL =================
-
-function drawInventory() {
-
-    ctx.fillStyle = "rgba(0,0,0,0.85)";
-    ctx.fillRect(200,100,600,400);
-
-    let centerX = 500;
-    let centerY = 300;
-
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-
-    ctx.strokeRect(centerX - 40, centerY - 150, 80, 80);   // helmet
-    ctx.strokeRect(centerX - 40, centerY - 50, 80, 100);   // chest
-    ctx.strokeRect(centerX + 120, centerY - 20, 60, 60);   // staff
-    ctx.strokeRect(centerX - 120, centerY - 20, 60, 60);   // ring
-
-    if (player.equipment.helmet) {
-        ctx.fillStyle = player.equipment.helmet.color;
-        ctx.fillRect(centerX - 30, centerY - 140, 60, 60);
-    }
-
-    if (player.equipment.chest) {
-        ctx.fillStyle = player.equipment.chest.color;
-        ctx.fillRect(centerX - 30, centerY - 40, 60, 80);
-    }
-
-    if (player.equipment.staff) {
-        ctx.fillStyle = "#8b5a2b";
-        ctx.fillRect(centerX + 130, centerY - 10, 40, 40);
-    }
-
-    if (player.equipment.ring) {
-        ctx.fillStyle = player.equipment.ring.color;
-        ctx.beginPath();
-        ctx.arc(centerX - 90, centerY + 10, 20, 0, Math.PI*2);
-        ctx.fill();
-    }
 }
 
 // ================= LOOP =================
@@ -276,6 +252,7 @@ function update() {
 
     updatePlayer();
     updateEnemies();
+    autoShoot();
     updateProjectiles();
 }
 
@@ -284,16 +261,13 @@ function draw() {
 
     drawWorld();
     drawEnemies();
-    drawDrops();
     drawProjectiles();
     drawPlayer();
-
-    if (paused) drawInventory();
 }
 
-for (let i=0;i<12;i++) spawnEnemy();
+for (let i=0;i<15;i++) spawnEnemy();
 
-function gameLoop() {
+function gameLoop(){
     update();
     draw();
     requestAnimationFrame(gameLoop);
