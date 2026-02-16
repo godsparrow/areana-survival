@@ -1,39 +1,19 @@
-// ==========================
-// TOP DOWN RPG ENGINE V1
-// ==========================
-
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 canvas.width = 1000;
 canvas.height = 600;
 
-// ==========================
-// WORLD + CAMERA
-// ==========================
-
 const WORLD_WIDTH = 5000;
 const WORLD_HEIGHT = 5000;
 const TILE_SIZE = 64;
 
-let camera = {
-    x: 0,
-    y: 0
-};
-
-// ==========================
-// GAME STATE
-// ==========================
-
+let camera = { x: 0, y: 0 };
 let paused = false;
 let keys = {};
 let enemies = [];
 let projectiles = [];
 let drops = [];
-
-// ==========================
-// PLAYER
-// ==========================
 
 let player = {
     x: 2500,
@@ -45,7 +25,7 @@ let player = {
     damage: 15,
     spell: "arcane",
     frame: 0,
-    frameTick: 0,
+    tick: 0,
     inventory: [],
     equipment: {
         helmet: null,
@@ -55,44 +35,38 @@ let player = {
     }
 };
 
-// ==========================
-// INPUT
-// ==========================
-
 document.addEventListener("keydown", e => {
     keys[e.key] = true;
     if (e.key === "p") paused = !paused;
 });
 document.addEventListener("keyup", e => keys[e.key] = false);
 
-// ==========================
-// TILE MAP
-// ==========================
+// ================= WORLD =================
 
 function drawWorld() {
     for (let x = 0; x < WORLD_WIDTH; x += TILE_SIZE) {
         for (let y = 0; y < WORLD_HEIGHT; y += TILE_SIZE) {
 
-            let screenX = x - camera.x;
-            let screenY = y - camera.y;
+            let sx = x - camera.x;
+            let sy = y - camera.y;
 
-            if (screenX > -TILE_SIZE && screenX < canvas.width &&
-                screenY > -TILE_SIZE && screenY < canvas.height) {
+            if (sx > -TILE_SIZE && sx < canvas.width &&
+                sy > -TILE_SIZE && sy < canvas.height) {
 
-                // Terraria style grass shading
                 ctx.fillStyle = "#3c9c3c";
-                ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+                ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
 
                 ctx.fillStyle = "#2f7f2f";
-                ctx.fillRect(screenX, screenY + 48, TILE_SIZE, 16);
+                ctx.fillRect(sx, sy + 48, TILE_SIZE, 16);
+
+                ctx.fillStyle = "#4fbf4f";
+                ctx.fillRect(sx, sy, TILE_SIZE, 10);
             }
         }
     }
 }
 
-// ==========================
-// PLAYER ANIMATION
-// ==========================
+// ================= PLAYER =================
 
 function updatePlayer() {
     let moving = false;
@@ -103,10 +77,10 @@ function updatePlayer() {
     if (keys["d"]) { player.x += player.speed; moving = true; }
 
     if (moving) {
-        player.frameTick++;
-        if (player.frameTick > 10) {
+        player.tick++;
+        if (player.tick > 8) {
             player.frame = (player.frame + 1) % 4;
-            player.frameTick = 0;
+            player.tick = 0;
         }
     }
 
@@ -119,62 +93,55 @@ function drawPlayer() {
     let px = player.x - camera.x - 32;
     let py = player.y - camera.y - 32;
 
-    // Base body (highly shaded pixel look)
     ctx.fillStyle = "#4fa3ff";
     ctx.fillRect(px, py, 64, 64);
 
     ctx.fillStyle = "#2e6fa8";
-    ctx.fillRect(px, py + 40, 64, 24);
+    ctx.fillRect(px, py + 42, 64, 22);
 
-    // Helmet overlay
+    ctx.fillStyle = "#6ec6ff";
+    ctx.fillRect(px + 8, py + 8, 48, 16);
+
     if (player.equipment.helmet) {
         ctx.fillStyle = player.equipment.helmet.color;
-        ctx.fillRect(px + 10, py + 5, 44, 20);
+        ctx.fillRect(px + 12, py + 6, 40, 18);
     }
 
-    // Chest overlay
     if (player.equipment.chest) {
         ctx.fillStyle = player.equipment.chest.color;
-        ctx.fillRect(px + 8, py + 25, 48, 30);
+        ctx.fillRect(px + 10, py + 28, 44, 26);
     }
 
-    // Staff overlay
     if (player.equipment.staff) {
         ctx.fillStyle = "#8b5a2b";
-        ctx.fillRect(px + 50, py + 20, 14, 6);
+        ctx.fillRect(px + 52, py + 20, 10, 28);
     }
 
-    // Elite glow ring if ring equipped
     if (player.equipment.ring) {
         ctx.strokeStyle = player.equipment.ring.color;
         ctx.beginPath();
-        ctx.arc(px + 32, py + 32, 40, 0, Math.PI * 2);
+        ctx.arc(px + 32, py + 32, 38, 0, Math.PI * 2);
         ctx.stroke();
     }
 }
 
-// ==========================
-// ENEMIES
-// ==========================
+// ================= ENEMIES =================
 
 function spawnEnemy() {
-
     let elite = Math.random() < 0.15;
 
     enemies.push({
         x: Math.random() * WORLD_WIDTH,
         y: Math.random() * WORLD_HEIGHT,
         size: 64,
-        hp: elite ? 200 : 100,
-        speed: elite ? 2.5 : 1.5,
-        damage: elite ? 20 : 10,
+        hp: elite ? 220 : 120,
+        speed: elite ? 2.5 : 1.6,
         elite: elite
     });
 }
 
 function updateEnemies() {
     enemies.forEach(enemy => {
-
         let dx = player.x - enemy.x;
         let dy = player.y - enemy.y;
         let dist = Math.sqrt(dx*dx + dy*dy);
@@ -193,30 +160,30 @@ function drawEnemies() {
         ctx.fillStyle = enemy.elite ? "#ff4444" : "#6a1b9a";
         ctx.fillRect(ex, ey, 64, 64);
 
+        ctx.fillStyle = enemy.elite ? "#ff7777" : "#9c4dcc";
+        ctx.fillRect(ex + 8, ey + 8, 48, 16);
+
         if (enemy.elite) {
             ctx.strokeStyle = "yellow";
-            ctx.strokeRect(ex-4, ey-4, 72, 72);
+            ctx.lineWidth = 3;
+            ctx.strokeRect(ex - 3, ey - 3, 70, 70);
         }
     });
 }
 
-// ==========================
-// SPELLS
-// ==========================
+// ================= SPELLS =================
 
 function castSpell() {
-    let type = player.spell;
-
     projectiles.push({
         x: player.x,
         y: player.y,
-        type: type,
-        life: 100
+        type: player.spell,
+        life: 80
     });
 }
 
 function updateProjectiles() {
-    projectiles.forEach((p, i) => {
+    projectiles.forEach((p,i) => {
         p.life--;
         if (p.life <= 0) projectiles.splice(i,1);
     });
@@ -237,22 +204,19 @@ function drawProjectiles() {
     });
 }
 
-// ==========================
-// DROPS + EQUIPMENT
-// ==========================
+// ================= DROPS =================
 
-function dropLoot(x, y) {
-
+function dropLoot(x,y) {
     if (Math.random() < 0.5) {
 
-        let types = ["helmet", "chest", "ring"];
+        let types = ["helmet","chest","ring"];
         let type = types[Math.floor(Math.random()*types.length)];
 
         drops.push({
-            x: x,
-            y: y,
-            type: type,
-            color: ["#aaa","#00ffcc","#ff00ff"][Math.floor(Math.random()*3)]
+            x:x,
+            y:y,
+            type:type,
+            color:["#aaa","#00ffcc","#ff00ff"][Math.floor(Math.random()*3)]
         });
     }
 }
@@ -260,31 +224,52 @@ function dropLoot(x, y) {
 function drawDrops() {
     drops.forEach(drop => {
         ctx.fillStyle = drop.color;
-        ctx.fillRect(drop.x - camera.x - 10, drop.y - camera.y - 10, 20, 20);
+        ctx.fillRect(drop.x - camera.x - 12, drop.y - camera.y - 12, 24, 24);
     });
 }
 
-// ==========================
-// INVENTORY PANEL
-// ==========================
+// ================= INVENTORY PANEL =================
 
 function drawInventory() {
 
     ctx.fillStyle = "rgba(0,0,0,0.85)";
     ctx.fillRect(200,100,600,400);
 
-    ctx.fillStyle = "white";
-    ctx.fillText("EQUIPMENT", 450, 130);
+    let centerX = 500;
+    let centerY = 300;
 
-    ctx.fillText("Helmet: " + (player.equipment.helmet ? "Equipped" : "Empty"), 300, 200);
-    ctx.fillText("Chest: " + (player.equipment.chest ? "Equipped" : "Empty"), 300, 230);
-    ctx.fillText("Staff: " + (player.equipment.staff ? "Equipped" : "Empty"), 300, 260);
-    ctx.fillText("Ring: " + (player.equipment.ring ? "Equipped" : "Empty"), 300, 290);
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+
+    ctx.strokeRect(centerX - 40, centerY - 150, 80, 80);   // helmet
+    ctx.strokeRect(centerX - 40, centerY - 50, 80, 100);   // chest
+    ctx.strokeRect(centerX + 120, centerY - 20, 60, 60);   // staff
+    ctx.strokeRect(centerX - 120, centerY - 20, 60, 60);   // ring
+
+    if (player.equipment.helmet) {
+        ctx.fillStyle = player.equipment.helmet.color;
+        ctx.fillRect(centerX - 30, centerY - 140, 60, 60);
+    }
+
+    if (player.equipment.chest) {
+        ctx.fillStyle = player.equipment.chest.color;
+        ctx.fillRect(centerX - 30, centerY - 40, 60, 80);
+    }
+
+    if (player.equipment.staff) {
+        ctx.fillStyle = "#8b5a2b";
+        ctx.fillRect(centerX + 130, centerY - 10, 40, 40);
+    }
+
+    if (player.equipment.ring) {
+        ctx.fillStyle = player.equipment.ring.color;
+        ctx.beginPath();
+        ctx.arc(centerX - 90, centerY + 10, 20, 0, Math.PI*2);
+        ctx.fill();
+    }
 }
 
-// ==========================
-// UPDATE LOOP
-// ==========================
+// ================= LOOP =================
 
 function update() {
     if (paused) return;
@@ -293,10 +278,6 @@ function update() {
     updateEnemies();
     updateProjectiles();
 }
-
-// ==========================
-// DRAW LOOP
-// ==========================
 
 function draw() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -310,13 +291,12 @@ function draw() {
     if (paused) drawInventory();
 }
 
+for (let i=0;i<12;i++) spawnEnemy();
+
 function gameLoop() {
     update();
     draw();
     requestAnimationFrame(gameLoop);
 }
-
-// Spawn starting enemies
-for (let i=0;i<10;i++) spawnEnemy();
 
 gameLoop();
